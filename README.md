@@ -2,12 +2,6 @@
 
 FastAPI service that takes US tax documents (PDF or image, digital or scanned), finds every form in each file, identifies it, extracts every filled field, and returns validated, typed JSON.
 
-```
-file ─► Docling (parse + OCR) ─► split into forms (printed headings) ─► per form:
-        classify (tev1) ─► tables (row reader) ─► label/value pairing ─► LLM (map to schema)
-        ─► checkboxes (page image) ─► parse + validate + ground ─► JSON
-```
-
 > Output is machine-extracted decision support, not tax or legal advice. Every value must be checked against the source document by a qualified person before use. See [DISCLAIMER.md](DISCLAIMER.md). Third-party licenses: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ## Supported documents
