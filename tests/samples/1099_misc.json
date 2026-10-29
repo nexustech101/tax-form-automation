@@ -1,0 +1,52 @@
+{
+  "tax_year": 2025,
+  "corrected": false,
+  "account_number": "PM-55102",
+  "payer": {
+    "name": "Cedar Point Property Management",
+    "tin": "46-2290174",
+    "address": {
+      "street": "1200 Lakeshore Blvd",
+      "city": "Cleveland",
+      "state": "OH",
+      "postal_code": "44114",
+      "country": null
+    },
+    "phone": "(216) 555-0172"
+  },
+  "recipient": {
+    "name": "Thomas R Whitaker",
+    "tin": "XXX-XX-8823",
+    "address": {
+      "street": "77 Birch Hollow Ln",
+      "city": "Akron",
+      "state": "OH",
+      "postal_code": "44303",
+      "country": null
+    },
+    "phone": null
+  },
+  "rents": 18600.0,
+  "royalties": 1240.33,
+  "other_income": 750.0,
+  "federal_income_tax_withheld": 0.0,
+  "fishing_boat_proceeds": null,
+  "medical_and_health_care_payments": null,
+  "direct_sales_5000_or_more": null,
+  "substitute_payments": null,
+  "crop_insurance_proceeds": null,
+  "gross_proceeds_paid_to_attorney": null,
+  "fish_purchased_for_resale": null,
+  "section_409a_deferrals": null,
+  "fatca_filing_requirement": false,
+  "excess_golden_parachute_payments": null,
+  "nonqualified_deferred_compensation": null,
+  "state_info": [
+    {
+      "state": "OH",
+      "payer_state_id": "OH-77120934",
+      "state_income": 20590.33,
+      "state_tax_withheld": 411.81
+    }
+  ]
+}

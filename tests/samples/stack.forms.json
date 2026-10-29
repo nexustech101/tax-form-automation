@@ -1,0 +1,174 @@
+[
+  {
+    "document_type": "w2",
+    "pages": [
+      1
+    ],
+    "fields": {
+      "tax_year": 2025,
+      "employee": {
+        "name": "Maria L Gonzalez",
+        "tin": "412-56-7890",
+        "address": {
+          "street": "1847 Willow Creek Dr",
+          "city": "Austin",
+          "state": "TX",
+          "postal_code": "78745",
+          "country": null
+        },
+        "phone": null
+      },
+      "employer": {
+        "name": "Brightline Logistics LLC",
+        "tin": "84-1736295",
+        "address": {
+          "street": "500 Commerce Pkwy Ste 200",
+          "city": "Dallas",
+          "state": "TX",
+          "postal_code": "75201",
+          "country": null
+        },
+        "phone": null
+      },
+      "control_number": "A7731-0042",
+      "wages_tips_other_comp": 68412.55,
+      "federal_income_tax_withheld": 7921.08,
+      "social_security_wages": 72500.0,
+      "social_security_tax_withheld": 4495.0,
+      "medicare_wages_and_tips": 72500.0,
+      "medicare_tax_withheld": 1051.25,
+      "social_security_tips": null,
+      "allocated_tips": null,
+      "dependent_care_benefits": 2400.0,
+      "nonqualified_plans": null,
+      "box12": [
+        {
+          "code": "D",
+          "amount": 4087.45
+        },
+        {
+          "code": "DD",
+          "amount": 9816.0
+        }
+      ],
+      "statutory_employee": false,
+      "retirement_plan": true,
+      "third_party_sick_pay": false,
+      "box14_other": [
+        {
+          "description": "SDI",
+          "amount": 312.4
+        }
+      ],
+      "state_local": [
+        {
+          "state": "TX",
+          "employer_state_id": "17-8839201",
+          "state_wages": 68412.55,
+          "state_income_tax": 0.0,
+          "local_wages": null,
+          "local_income_tax": null,
+          "locality_name": null
+        }
+      ]
+    }
+  },
+  {
+    "document_type": "1099_nec",
+    "pages": [
+      2
+    ],
+    "fields": {
+      "tax_year": 2025,
+      "corrected": false,
+      "account_number": "VND-20931",
+      "payer": {
+        "name": "Summit Ridge Marketing Inc",
+        "tin": "27-4410983",
+        "address": {
+          "street": "88 Harbor View Rd",
+          "city": "Portland",
+          "state": "OR",
+          "postal_code": "97205",
+          "country": null
+        },
+        "phone": "(503) 555-0148"
+      },
+      "recipient": {
+        "name": "Devon K Patel",
+        "tin": "XXX-XX-4417",
+        "address": {
+          "street": "2210 Elm St Apt 3B",
+          "city": "Beaverton",
+          "state": "OR",
+          "postal_code": "97005",
+          "country": null
+        },
+        "phone": null
+      },
+      "second_tin_notice": null,
+      "nonemployee_compensation": 24750.0,
+      "direct_sales_5000_or_more": false,
+      "excess_golden_parachute_payments": null,
+      "federal_income_tax_withheld": 0.0,
+      "state_info": [
+        {
+          "state": "OR",
+          "payer_state_id": "0938471-2",
+          "state_income": 24750.0,
+          "state_tax_withheld": 1980.0
+        }
+      ]
+    }
+  },
+  {
+    "document_type": "1098_t",
+    "pages": [
+      3
+    ],
+    "fields": {
+      "tax_year": 2025,
+      "corrected": false,
+      "account_number": "S00841276",
+      "filer": {
+        "name": "Riverside State University",
+        "tin": "95-6006143",
+        "address": {
+          "street": "900 University Ave",
+          "city": "Riverside",
+          "state": "CA",
+          "postal_code": "92521",
+          "country": null
+        },
+        "phone": "(951) 555-0101"
+      },
+      "student": {
+        "name": "Aisha N Rahman",
+        "tin": "XXX-XX-7754",
+        "address": {
+          "street": "3300 Canyon Crest Dr Apt 12",
+          "city": "Riverside",
+          "state": "CA",
+          "postal_code": "92507",
+          "country": null
+        },
+        "phone": null
+      },
+      "payments_received_for_qualified_tuition": 11640.0,
+      "adjustments_made_for_prior_year": null,
+      "scholarships_or_grants": 4500.0,
+      "adjustments_to_scholarships_for_prior_year": null,
+      "includes_amounts_for_next_period": true,
+      "at_least_half_time_student": true,
+      "graduate_student": false,
+      "insurance_contract_reimbursement": null
+    }
+  },
+  {
+    "document_type": "unknown",
+    "pages": [
+      4
+    ],
+    "fields": null
+  }
+]

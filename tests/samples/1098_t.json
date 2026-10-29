@@ -1,0 +1,37 @@
+{
+  "tax_year": 2025,
+  "corrected": false,
+  "account_number": "S00841276",
+  "filer": {
+    "name": "Riverside State University",
+    "tin": "95-6006143",
+    "address": {
+      "street": "900 University Ave",
+      "city": "Riverside",
+      "state": "CA",
+      "postal_code": "92521",
+      "country": null
+    },
+    "phone": "(951) 555-0101"
+  },
+  "student": {
+    "name": "Aisha N Rahman",
+    "tin": "XXX-XX-7754",
+    "address": {
+      "street": "3300 Canyon Crest Dr Apt 12",
+      "city": "Riverside",
+      "state": "CA",
+      "postal_code": "92507",
+      "country": null
+    },
+    "phone": null
+  },
+  "payments_received_for_qualified_tuition": 11640.0,
+  "adjustments_made_for_prior_year": null,
+  "scholarships_or_grants": 4500.0,
+  "adjustments_to_scholarships_for_prior_year": null,
+  "includes_amounts_for_next_period": true,
+  "at_least_half_time_student": true,
+  "graduate_student": false,
+  "insurance_contract_reimbursement": null
+}

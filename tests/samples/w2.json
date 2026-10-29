@@ -1,0 +1,68 @@
+{
+  "tax_year": 2025,
+  "employee": {
+    "name": "Maria L Gonzalez",
+    "tin": "412-56-7890",
+    "address": {
+      "street": "1847 Willow Creek Dr",
+      "city": "Austin",
+      "state": "TX",
+      "postal_code": "78745",
+      "country": null
+    },
+    "phone": null
+  },
+  "employer": {
+    "name": "Brightline Logistics LLC",
+    "tin": "84-1736295",
+    "address": {
+      "street": "500 Commerce Pkwy Ste 200",
+      "city": "Dallas",
+      "state": "TX",
+      "postal_code": "75201",
+      "country": null
+    },
+    "phone": null
+  },
+  "control_number": "A7731-0042",
+  "wages_tips_other_comp": 68412.55,
+  "federal_income_tax_withheld": 7921.08,
+  "social_security_wages": 72500.0,
+  "social_security_tax_withheld": 4495.0,
+  "medicare_wages_and_tips": 72500.0,
+  "medicare_tax_withheld": 1051.25,
+  "social_security_tips": null,
+  "allocated_tips": null,
+  "dependent_care_benefits": 2400.0,
+  "nonqualified_plans": null,
+  "box12": [
+    {
+      "code": "D",
+      "amount": 4087.45
+    },
+    {
+      "code": "DD",
+      "amount": 9816.0
+    }
+  ],
+  "statutory_employee": false,
+  "retirement_plan": true,
+  "third_party_sick_pay": false,
+  "box14_other": [
+    {
+      "description": "SDI",
+      "amount": 312.4
+    }
+  ],
+  "state_local": [
+    {
+      "state": "TX",
+      "employer_state_id": "17-8839201",
+      "state_wages": 68412.55,
+      "state_income_tax": 0.0,
+      "local_wages": null,
+      "local_income_tax": null,
+      "locality_name": null
+    }
+  ]
+}

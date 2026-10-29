@@ -1,0 +1,49 @@
+{
+  "tax_year": 2025,
+  "corrected": false,
+  "account_number": "88213-4410",
+  "payer": {
+    "name": "Northgate Index Funds",
+    "tin": "04-6129855",
+    "address": {
+      "street": "1 Financial Plaza",
+      "city": "Boston",
+      "state": "MA",
+      "postal_code": "02110",
+      "country": null
+    },
+    "phone": "(617) 555-0123"
+  },
+  "recipient": {
+    "name": "Kevin J O'Brien",
+    "tin": "XXX-XX-5590",
+    "address": {
+      "street": "315 Maple Ave",
+      "city": "Quincy",
+      "state": "MA",
+      "postal_code": "02169",
+      "country": null
+    },
+    "phone": null
+  },
+  "total_ordinary_dividends": 3914.62,
+  "qualified_dividends": 3288.1,
+  "total_capital_gain_distributions": 1207.95,
+  "unrecaptured_section_1250_gain": 88.12,
+  "section_1202_gain": null,
+  "collectibles_28_rate_gain": null,
+  "section_897_ordinary_dividends": null,
+  "section_897_capital_gain": null,
+  "nondividend_distributions": 143.0,
+  "federal_income_tax_withheld": 0.0,
+  "section_199a_dividends": 214.37,
+  "investment_expenses": null,
+  "foreign_tax_paid": 61.08,
+  "foreign_country": "Various",
+  "cash_liquidation_distributions": null,
+  "noncash_liquidation_distributions": null,
+  "fatca_filing_requirement": false,
+  "exempt_interest_dividends": 402.5,
+  "specified_private_activity_bond_interest_dividends": null,
+  "state_info": []
+}

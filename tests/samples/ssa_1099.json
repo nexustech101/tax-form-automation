@@ -1,0 +1,21 @@
+{
+  "tax_year": 2025,
+  "beneficiary": {
+    "name": "Robert E Lawson",
+    "tin": "XXX-XX-9128",
+    "address": {
+      "street": "61 Orchard Rd",
+      "city": "Lancaster",
+      "state": "PA",
+      "postal_code": "17601",
+      "country": null
+    },
+    "phone": null
+  },
+  "benefits_paid": 26184.0,
+  "benefits_repaid": 0.0,
+  "net_benefits": 26184.0,
+  "voluntary_federal_income_tax_withheld": 2618.4,
+  "claim_number": "198-44-9128A",
+  "medicare_part_b_premiums": 2220.0
+}

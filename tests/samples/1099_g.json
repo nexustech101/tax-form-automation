@@ -1,0 +1,46 @@
+{
+  "tax_year": 2025,
+  "corrected": false,
+  "account_number": "UI-0098123",
+  "payer": {
+    "name": "State of Colorado Dept of Labor and Employment",
+    "tin": "84-6000583",
+    "address": {
+      "street": "633 17th St",
+      "city": "Denver",
+      "state": "CO",
+      "postal_code": "80202",
+      "country": null
+    },
+    "phone": "(303) 555-0110"
+  },
+  "recipient": {
+    "name": "Jordan P Ellis",
+    "tin": "XXX-XX-6142",
+    "address": {
+      "street": "2718 Pine Ridge Ct",
+      "city": "Aurora",
+      "state": "CO",
+      "postal_code": "80013",
+      "country": null
+    },
+    "phone": null
+  },
+  "unemployment_compensation": 8736.0,
+  "state_or_local_income_tax_refunds": 412.0,
+  "box2_tax_year": 2024,
+  "federal_income_tax_withheld": 873.6,
+  "rtaa_payments": null,
+  "taxable_grants": null,
+  "agriculture_payments": null,
+  "trade_or_business_income": false,
+  "market_gain": null,
+  "state_info": [
+    {
+      "state": "CO",
+      "payer_state_id": "CO-UI-4471",
+      "state_income": null,
+      "state_tax_withheld": 384.38
+    }
+  ]
+}

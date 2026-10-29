@@ -1,0 +1,46 @@
+{
+  "tax_year": 2025,
+  "corrected": false,
+  "account_number": "4471-009-221",
+  "payer": {
+    "name": "First Harbor Savings Bank",
+    "tin": "59-3381246",
+    "address": {
+      "street": "400 Main St",
+      "city": "Tampa",
+      "state": "FL",
+      "postal_code": "33602",
+      "country": null
+    },
+    "phone": "(813) 555-0190"
+  },
+  "recipient": {
+    "name": "Angela M Brooks",
+    "tin": "XXX-XX-2368",
+    "address": {
+      "street": "9 Palmetto Way",
+      "city": "Clearwater",
+      "state": "FL",
+      "postal_code": "33755",
+      "country": null
+    },
+    "phone": null
+  },
+  "payer_rtn": "063107513",
+  "interest_income": 1382.17,
+  "early_withdrawal_penalty": 45.0,
+  "us_savings_bonds_and_treasury_interest": 210.5,
+  "federal_income_tax_withheld": 0.0,
+  "investment_expenses": null,
+  "foreign_tax_paid": null,
+  "foreign_country": null,
+  "tax_exempt_interest": 96.4,
+  "specified_private_activity_bond_interest": null,
+  "market_discount": null,
+  "bond_premium": 12.75,
+  "bond_premium_on_treasury_obligations": null,
+  "bond_premium_on_tax_exempt_bond": null,
+  "tax_exempt_tax_credit_bond_cusip": null,
+  "fatca_filing_requirement": false,
+  "state_info": []
+}

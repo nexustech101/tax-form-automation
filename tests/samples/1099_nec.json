@@ -1,0 +1,42 @@
+{
+  "tax_year": 2025,
+  "corrected": false,
+  "account_number": "VND-20931",
+  "payer": {
+    "name": "Summit Ridge Marketing Inc",
+    "tin": "27-4410983",
+    "address": {
+      "street": "88 Harbor View Rd",
+      "city": "Portland",
+      "state": "OR",
+      "postal_code": "97205",
+      "country": null
+    },
+    "phone": "(503) 555-0148"
+  },
+  "recipient": {
+    "name": "Devon K Patel",
+    "tin": "XXX-XX-4417",
+    "address": {
+      "street": "2210 Elm St Apt 3B",
+      "city": "Beaverton",
+      "state": "OR",
+      "postal_code": "97005",
+      "country": null
+    },
+    "phone": null
+  },
+  "second_tin_notice": null,
+  "nonemployee_compensation": 24750.0,
+  "direct_sales_5000_or_more": false,
+  "excess_golden_parachute_payments": null,
+  "federal_income_tax_withheld": 0.0,
+  "state_info": [
+    {
+      "state": "OR",
+      "payer_state_id": "0938471-2",
+      "state_income": 24750.0,
+      "state_tax_withheld": 1980.0
+    }
+  ]
+}

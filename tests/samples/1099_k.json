@@ -1,0 +1,59 @@
+{
+  "tax_year": 2025,
+  "corrected": false,
+  "account_number": "MID-4471029",
+  "filer": {
+    "name": "Crestline Payments LLC",
+    "tin": "45-3398120",
+    "address": {
+      "street": "250 Market St Ste 900",
+      "city": "San Francisco",
+      "state": "CA",
+      "postal_code": "94105",
+      "country": null
+    },
+    "phone": "(415) 555-0166"
+  },
+  "payee": {
+    "name": "Harbor Coffee Roasters LLC",
+    "tin": "81-2204736",
+    "address": {
+      "street": "22 Pier Rd",
+      "city": "Madison",
+      "state": "WI",
+      "postal_code": "53704",
+      "country": null
+    },
+    "phone": null
+  },
+  "filer_is_pse": true,
+  "filer_is_epf_or_other_third_party": false,
+  "payment_card_transactions": true,
+  "third_party_network_transactions": false,
+  "pse_name_and_phone": "Crestline Payments (800) 555-0129",
+  "gross_amount": 148236.5,
+  "card_not_present_transactions": 21904.0,
+  "merchant_category_code": "5814",
+  "number_of_payment_transactions": "16,212",
+  "federal_income_tax_withheld": 0.0,
+  "january": 9812.4,
+  "february": 9204.15,
+  "march": 11560.0,
+  "april": 12118.75,
+  "may": 13402.3,
+  "june": 14890.1,
+  "july": 15226.45,
+  "august": 14775.6,
+  "september": 12940.25,
+  "october": 12101.9,
+  "november": 10840.35,
+  "december": 11364.25,
+  "state_info": [
+    {
+      "state": "WI",
+      "payer_state_id": "WI-036-1178",
+      "state_income": null,
+      "state_tax_withheld": 0.0
+    }
+  ]
+}

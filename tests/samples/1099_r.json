@@ -1,0 +1,48 @@
+{
+  "tax_year": 2025,
+  "corrected": false,
+  "account_number": "IRA-7730215",
+  "payer": {
+    "name": "Evergreen Retirement Services",
+    "tin": "91-1543307",
+    "address": {
+      "street": "1500 4th Ave",
+      "city": "Seattle",
+      "state": "WA",
+      "postal_code": "98101",
+      "country": null
+    },
+    "phone": "(206) 555-0161"
+  },
+  "recipient": {
+    "name": "Linda S Chen",
+    "tin": "XXX-XX-3071",
+    "address": {
+      "street": "4020 Lake City Way NE",
+      "city": "Seattle",
+      "state": "WA",
+      "postal_code": "98105",
+      "country": null
+    },
+    "phone": null
+  },
+  "gross_distribution": 32000.0,
+  "taxable_amount": 32000.0,
+  "taxable_amount_not_determined": false,
+  "total_distribution": false,
+  "capital_gain": null,
+  "federal_income_tax_withheld": 6400.0,
+  "employee_contributions": null,
+  "net_unrealized_appreciation": null,
+  "distribution_codes": "7",
+  "ira_sep_simple": true,
+  "other_amount": null,
+  "other_percent": null,
+  "percent_of_total_distribution": null,
+  "total_employee_contributions": null,
+  "amount_allocable_to_irr": null,
+  "first_year_of_designated_roth": null,
+  "fatca_filing_requirement": false,
+  "date_of_payment": "2025-06-14",
+  "state_info": []
+}

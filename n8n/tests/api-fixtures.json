@@ -1,0 +1,311 @@
+{
+  "not_tax": {
+    "error": {
+      "code": "unsupported_document_type",
+      "message": "The document is not one of the supported tax forms.",
+      "request_id": "req-422",
+      "details": {
+        "classification": {
+          "document_type": "unknown",
+          "probabilities": {
+            "none": 0.994,
+            "1099_nec": 0.005
+          }
+        }
+      }
+    }
+  },
+  "bulk": {
+    "data": {
+      "request_id": "req-bulk",
+      "files": [
+        {
+          "filename": "w2.pdf",
+          "status": "ok",
+          "error": null,
+          "document": {
+            "filename": "w2.pdf",
+            "media_type": "application/pdf",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "pages": 3,
+            "text_layer": true
+          },
+          "forms": [
+            {
+              "index": 0,
+              "status": "ok",
+              "pages": [
+                1
+              ],
+              "document_type": "w2",
+              "form_name": "Form W-2 Wage and Tax Statement",
+              "classification": {
+                "document_type": "w2",
+                "label": "Form W-2 Wage and Tax Statement",
+                "confidence": 0.9986,
+                "probabilities": {
+                  "w2": 0.9986,
+                  "none": 0.0014
+                },
+                "model": "tev1"
+              },
+              "fields": {
+                "tax_year": 2025,
+                "employee": {
+                  "name": "Maria L Gonzalez",
+                  "tin": "412-56-7890",
+                  "address": {
+                    "street": "1847 Willow Creek Dr",
+                    "city": "Austin",
+                    "state": "TX",
+                    "postal_code": "78745",
+                    "country": null
+                  },
+                  "phone": null
+                },
+                "employer": {
+                  "name": "Brightline Logistics LLC",
+                  "tin": "84-1736295",
+                  "address": {
+                    "street": "500 Commerce Pkwy Ste 200",
+                    "city": "Dallas",
+                    "state": "TX",
+                    "postal_code": "75201",
+                    "country": null
+                  },
+                  "phone": null
+                },
+                "control_number": "A7731-0042",
+                "wages_tips_other_comp": 68412.55,
+                "federal_income_tax_withheld": 7921.08,
+                "social_security_wages": 72500.0,
+                "social_security_tax_withheld": 4495.0,
+                "medicare_wages_and_tips": 72500.0,
+                "medicare_tax_withheld": 1051.25,
+                "social_security_tips": null,
+                "allocated_tips": null,
+                "dependent_care_benefits": 2400.0,
+                "nonqualified_plans": null,
+                "box12": [
+                  {
+                    "code": "D",
+                    "amount": 4087.45
+                  },
+                  {
+                    "code": "DD",
+                    "amount": 9816.0
+                  }
+                ],
+                "statutory_employee": false,
+                "retirement_plan": true,
+                "third_party_sick_pay": false,
+                "box14_other": [
+                  {
+                    "description": "SDI",
+                    "amount": 312.4
+                  }
+                ],
+                "state_local": [
+                  {
+                    "state": "TX",
+                    "employer_state_id": "17-8839201",
+                    "state_wages": 68412.55,
+                    "state_income_tax": 0.0,
+                    "local_wages": null,
+                    "local_income_tax": null,
+                    "locality_name": null
+                  }
+                ]
+              },
+              "validation": {
+                "valid": true,
+                "warnings": [],
+                "fields_found": 24,
+                "fields_total": 33
+              },
+              "text_layer": true,
+              "duplicate_of": null,
+              "extraction_model": "qwen3.5:4b",
+              "timings_ms": {
+                "classify": 380,
+                "extract": 5200,
+                "total": 5600
+              }
+            },
+            {
+              "index": 1,
+              "status": "duplicate",
+              "pages": [
+                2
+              ],
+              "document_type": "w2",
+              "form_name": "Form W-2 Wage and Tax Statement",
+              "classification": {
+                "document_type": "w2",
+                "label": "Form W-2 Wage and Tax Statement",
+                "confidence": 0.9986,
+                "probabilities": {
+                  "w2": 0.9986,
+                  "none": 0.0014
+                },
+                "model": "tev1"
+              },
+              "fields": {
+                "tax_year": 2025,
+                "employee": {
+                  "name": "Maria L Gonzalez",
+                  "tin": "412-56-7890",
+                  "address": {
+                    "street": "1847 Willow Creek Dr",
+                    "city": "Austin",
+                    "state": "TX",
+                    "postal_code": "78745",
+                    "country": null
+                  },
+                  "phone": null
+                },
+                "employer": {
+                  "name": "Brightline Logistics LLC",
+                  "tin": "84-1736295",
+                  "address": {
+                    "street": "500 Commerce Pkwy Ste 200",
+                    "city": "Dallas",
+                    "state": "TX",
+                    "postal_code": "75201",
+                    "country": null
+                  },
+                  "phone": null
+                },
+                "control_number": "A7731-0042",
+                "wages_tips_other_comp": 68412.55,
+                "federal_income_tax_withheld": 7921.08,
+                "social_security_wages": 72500.0,
+                "social_security_tax_withheld": 4495.0,
+                "medicare_wages_and_tips": 72500.0,
+                "medicare_tax_withheld": 1051.25,
+                "social_security_tips": null,
+                "allocated_tips": null,
+                "dependent_care_benefits": 2400.0,
+                "nonqualified_plans": null,
+                "box12": [
+                  {
+                    "code": "D",
+                    "amount": 4087.45
+                  },
+                  {
+                    "code": "DD",
+                    "amount": 9816.0
+                  }
+                ],
+                "statutory_employee": false,
+                "retirement_plan": true,
+                "third_party_sick_pay": false,
+                "box14_other": [
+                  {
+                    "description": "SDI",
+                    "amount": 312.4
+                  }
+                ],
+                "state_local": [
+                  {
+                    "state": "TX",
+                    "employer_state_id": "17-8839201",
+                    "state_wages": 68412.55,
+                    "state_income_tax": 0.0,
+                    "local_wages": null,
+                    "local_income_tax": null,
+                    "locality_name": null
+                  }
+                ]
+              },
+              "validation": {
+                "valid": true,
+                "warnings": [],
+                "fields_found": 24,
+                "fields_total": 33
+              },
+              "text_layer": true,
+              "duplicate_of": 0,
+              "extraction_model": "qwen3.5:4b",
+              "timings_ms": {
+                "classify": 380,
+                "extract": 5200,
+                "total": 5600
+              }
+            },
+            {
+              "index": 2,
+              "status": "unsupported",
+              "pages": [
+                3
+              ],
+              "document_type": "unknown",
+              "form_name": null,
+              "classification": {
+                "document_type": "unknown",
+                "label": null,
+                "confidence": 0.97,
+                "probabilities": {
+                  "none": 0.97,
+                  "w2": 0.01
+                },
+                "model": "tev1"
+              },
+              "fields": null,
+              "validation": null,
+              "text_layer": true,
+              "duplicate_of": null,
+              "extraction_model": null,
+              "timings_ms": {
+                "classify": 350
+              }
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "files": 1,
+        "failed_files": 0,
+        "forms": 1,
+        "unsupported": 1,
+        "duplicates": 1,
+        "by_type": {
+          "w2": 1
+        }
+      },
+      "timings_ms": {
+        "total": 9100
+      }
+    }
+  },
+  "bulk_failed": {
+    "data": {
+      "request_id": "req-bad",
+      "files": [
+        {
+          "filename": "notes.docx",
+          "status": "failed",
+          "document": null,
+          "forms": [],
+          "error": {
+            "code": "unsupported_media_type",
+            "message": "Unsupported file type.",
+            "request_id": null,
+            "details": null
+          }
+        }
+      ],
+      "summary": {
+        "files": 1,
+        "failed_files": 1,
+        "forms": 0,
+        "unsupported": 0,
+        "duplicates": 0,
+        "by_type": {}
+      },
+      "timings_ms": {
+        "total": 12
+      }
+    }
+  }
+}

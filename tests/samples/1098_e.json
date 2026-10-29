@@ -1,0 +1,31 @@
+{
+  "tax_year": 2025,
+  "corrected": false,
+  "account_number": "SL-6619024",
+  "lender": {
+    "name": "Pinnacle Student Loan Servicing",
+    "tin": "52-2013874",
+    "address": {
+      "street": "PO Box 7400",
+      "city": "Wilkes-Barre",
+      "state": "PA",
+      "postal_code": "18773",
+      "country": null
+    },
+    "phone": "(888) 555-0177"
+  },
+  "borrower": {
+    "name": "Tyler J Morgan",
+    "tin": "XXX-XX-1209",
+    "address": {
+      "street": "540 W Madison St Unit 9",
+      "city": "Chicago",
+      "state": "IL",
+      "postal_code": "60661",
+      "country": null
+    },
+    "phone": null
+  },
+  "student_loan_interest_received": 1876.43,
+  "excludes_origination_fees_or_capitalized_interest": false
+}

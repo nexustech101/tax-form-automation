@@ -1,0 +1,111 @@
+{
+  "tax_year": 2025,
+  "marketplace_identifier": "17.ME*.512.002.010",
+  "policy_number": "MKT-88140277",
+  "policy_issuer": "Pine State Health Cooperative",
+  "recipient_name": "Daniel R Fournier",
+  "recipient_ssn": "XXX-XX-5512",
+  "recipient_date_of_birth": "1986-04-22",
+  "spouse_name": "Claire M Fournier",
+  "spouse_ssn": "XXX-XX-8034",
+  "spouse_date_of_birth": "1988-09-03",
+  "policy_start_date": "2025-01-01",
+  "policy_termination_date": "2025-12-31",
+  "street_address": "48 Ocean House Rd",
+  "city": "Cape Elizabeth",
+  "state": "ME",
+  "country_and_zip": "US 04107",
+  "covered_individuals": [
+    {
+      "name": "Daniel R Fournier",
+      "ssn": "XXX-XX-5512",
+      "date_of_birth": "1986-04-22",
+      "coverage_start_date": "2025-01-01",
+      "coverage_termination_date": "2025-12-31"
+    },
+    {
+      "name": "Claire M Fournier",
+      "ssn": "XXX-XX-8034",
+      "date_of_birth": "1988-09-03",
+      "coverage_start_date": "2025-01-01",
+      "coverage_termination_date": "2025-12-31"
+    }
+  ],
+  "monthly": [
+    {
+      "month": "January",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "February",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "March",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "April",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "May",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "June",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "July",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "August",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "September",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "October",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "November",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    },
+    {
+      "month": "December",
+      "enrollment_premium": 1184.0,
+      "slcsp_premium": 1262.0,
+      "advance_ptc": 806.0
+    }
+  ],
+  "annual_enrollment_premiums": 14208.0,
+  "annual_slcsp_premium": 15144.0,
+  "annual_advance_ptc": 9672.0
+}

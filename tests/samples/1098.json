@@ -1,0 +1,40 @@
+{
+  "tax_year": 2025,
+  "corrected": false,
+  "account_number": "LN-30017755",
+  "lender": {
+    "name": "Keystone Home Lending NA",
+    "tin": "23-1197642",
+    "address": {
+      "street": "2 Penn Center",
+      "city": "Philadelphia",
+      "state": "PA",
+      "postal_code": "19102",
+      "country": null
+    },
+    "phone": "(800) 555-0135"
+  },
+  "borrower": {
+    "name": "Samuel and Priya Okafor",
+    "tin": "XXX-XX-4806",
+    "address": {
+      "street": "118 Chestnut Hill Ave",
+      "city": "Philadelphia",
+      "state": "PA",
+      "postal_code": "19118",
+      "country": null
+    },
+    "phone": null
+  },
+  "mortgage_interest_received": 14982.36,
+  "outstanding_mortgage_principal": 387450.0,
+  "mortgage_origination_date": "2021-03-15",
+  "refund_of_overpaid_interest": 0.0,
+  "mortgage_insurance_premiums": 1104.0,
+  "points_paid_on_purchase": 0.0,
+  "property_address_same_as_borrower": true,
+  "property_address": null,
+  "number_of_properties": "1",
+  "other": null,
+  "mortgage_acquisition_date": null
+}

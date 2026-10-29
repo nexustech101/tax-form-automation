@@ -1,0 +1,86 @@
+{
+  "tax_year": 2025,
+  "partnership": {
+    "name": "Blue Mesa Real Estate Partners LP",
+    "tin": "86-3320417",
+    "address": {
+      "street": "7400 E Camelback Rd",
+      "city": "Scottsdale",
+      "state": "AZ",
+      "postal_code": "85251",
+      "country": null
+    },
+    "phone": null
+  },
+  "irs_center": "Ogden, UT",
+  "publicly_traded_partnership": false,
+  "partner": {
+    "name": "Helen W Park",
+    "tin": "XXX-XX-3364",
+    "address": {
+      "street": "12 Saguaro Ln",
+      "city": "Tempe",
+      "state": "AZ",
+      "postal_code": "85281",
+      "country": null
+    },
+    "phone": null
+  },
+  "general_partner_or_llc_member_manager": false,
+  "limited_partner_or_other_llc_member": true,
+  "domestic_partner": true,
+  "foreign_partner": false,
+  "partner_entity_type": "Individual",
+  "profit_share_ending_percent": 12.5,
+  "loss_share_ending_percent": 12.5,
+  "capital_share_ending_percent": 12.5,
+  "capital_account": {
+    "beginning_capital_account": 150000.0,
+    "capital_contributed": 25000.0,
+    "current_year_net_income": 18442.0,
+    "other_increase_decrease": null,
+    "withdrawals_and_distributions": 12000.0,
+    "ending_capital_account": 181442.0
+  },
+  "ordinary_business_income": 4210.0,
+  "net_rental_real_estate_income": 13870.0,
+  "other_net_rental_income": null,
+  "guaranteed_payments_for_services": null,
+  "guaranteed_payments_for_capital": null,
+  "total_guaranteed_payments": null,
+  "interest_income": 362.0,
+  "ordinary_dividends": null,
+  "qualified_dividends": null,
+  "dividend_equivalents": null,
+  "royalties": null,
+  "net_short_term_capital_gain": null,
+  "net_long_term_capital_gain": 1950.0,
+  "collectibles_28_gain": null,
+  "unrecaptured_section_1250_gain": null,
+  "net_section_1231_gain": -840.0,
+  "other_income": [],
+  "section_179_deduction": null,
+  "other_deductions": [],
+  "self_employment_earnings": [],
+  "credits": [],
+  "schedule_k3_attached": null,
+  "amt_items": [],
+  "tax_exempt_income_and_nondeductible_expenses": [],
+  "distributions": [
+    {
+      "code": "A",
+      "amount": 12000.0
+    }
+  ],
+  "other_information": [
+    {
+      "code": "Z",
+      "amount": 4210.0
+    },
+    {
+      "code": "N",
+      "amount": 512.0
+    }
+  ],
+  "foreign_taxes_paid_or_accrued": null
+}
