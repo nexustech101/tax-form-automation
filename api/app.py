@@ -28,7 +28,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 
 from api import errors
-from api.deps import MB, RateWindows
+from api.deps import MB, BodyLimit, JobGate, RateWindows
 from api.routes import documents, keys, system
 from core.config import Settings, get_settings
 from core.db import db, init_db
@@ -73,11 +73,14 @@ def create_app(
     app.state.settings = settings
     app.state.pipeline = pipeline
     app.state.rate_windows = RateWindows()
+    app.state.jobs = JobGate(settings.max_concurrent_jobs, settings.max_queued_jobs)
+    app.add_middleware(BodyLimit, settings=settings)
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):
         request.state.request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
         started = time.perf_counter()
+        # Early refusal when the client declares an oversized body; BodyLimit enforces the actual bytes.
         limit_mb = settings.bulk_max_total_mb if request.url.path.endswith("/bulk") else settings.max_upload_mb
         length = request.headers.get("content-length")
         if length and length.isdigit() and int(length) > limit_mb * MB + 64 * 1024:

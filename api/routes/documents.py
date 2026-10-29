@@ -7,7 +7,7 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 
-from api.deps import MB, PipelineDep, RateLimit, SettingsDep, read_upload, require_api_key
+from api.deps import MB, PipelineDep, RateLimit, SettingsDep, job_slot, read_upload, require_api_key
 from api.errors import responses
 from core.forms import FORMS
 from core.schema import BulkExtractResponse, ClassifyResponse, DocumentType, Envelope, ExtractResponse
@@ -27,7 +27,7 @@ FILE_TYPES = "PDF, PNG, JPEG, TIFF, BMP or WEBP"
     "/documents/extract",
     response_model=Envelope[ExtractResponse],
     responses=responses(400, 413, 415, 422, 503),
-    dependencies=[Depends(RateLimit("pipeline"))],
+    dependencies=[Depends(RateLimit("pipeline")), Depends(job_slot)],
     summary="Extract one tax form",
 )
 async def extract_document(
@@ -60,7 +60,7 @@ async def extract_document(
     "/documents/extract/bulk",
     response_model=Envelope[BulkExtractResponse],
     responses=responses(400, 413, 503),
-    dependencies=[Depends(RateLimit("bulk"))],
+    dependencies=[Depends(RateLimit("bulk")), Depends(job_slot)],
     summary="Extract every form in one or more files",
 )
 async def extract_bulk(
@@ -76,9 +76,11 @@ async def extract_bulk(
     statements (1099-DIV, 1099-INT, 1099-B ... in one PDF).
 
     Per form, `status` is `ok`, `unsupported` (pages that are not a supported
-    form; nothing is dropped silently) or `duplicate` (another copy of an
-    earlier form in the same file). A file that can't be read is reported
+    form; nothing is dropped silently) or `duplicate` (every extracted value
+    equals an earlier form in the same file). Pages no text was read from are
+    listed in `document.missing_pages`. A file that can't be read is reported
     with `status: failed` and an `error`; the other files are still processed.
+    The request body is limited to `BULK_MAX_TOTAL_MB`, counted as it arrives.
     """
     if len(files) > settings.bulk_max_files:
         raise HTTPException(413, f"At most {settings.bulk_max_files} files per request.")

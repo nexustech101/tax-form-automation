@@ -29,7 +29,7 @@ log = logging.getLogger("tax_doc_api")
 
 HTTP_CODES = {
     400: "bad_request", 401: "unauthorized", 
-    403: "forbidden", 404: "not_found",
+    403: "forbidden", 404: "not_found", 503: "busy",
     413: "payload_too_large", 429: "rate_limited"
 }
 
@@ -55,7 +55,7 @@ DESCRIPTIONS = {
     415: "Not a PDF or supported image",
     422: "Unreadable, unsupported or multi-form document",
     429: "Rate limit exceeded",
-    503: "Model backend unavailable",
+    503: "Server busy, or a model backend is unavailable",
 }
 
 

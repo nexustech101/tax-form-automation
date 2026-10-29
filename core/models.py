@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from pydantic import BaseModel
-from registers.db import db_field
+from registers import db_field
 
 from core.db import DATABASE_URL, db, utcnow
 

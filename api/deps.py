@@ -1,16 +1,19 @@
 """deps.py
 
-FastAPI dependencies: API-key auth, the shared pipeline and settings, per-key
-rate limits and bounded upload reading.
+FastAPI dependencies and limits: API-key auth, the shared pipeline and
+settings, per-key rate limits, the extraction job gate, request body size and
+bounded upload reading.
 """
 
 from __future__ import annotations
 
+import asyncio
 import math
 import threading
 import time
 from collections import defaultdict, deque
-from typing import Annotated, Optional
+from contextlib import asynccontextmanager
+from typing import Annotated, AsyncIterator, Optional
 
 from fastapi import Depends, HTTPException, Request, Security, UploadFile
 from fastapi.security import APIKeyHeader
@@ -104,6 +107,74 @@ class RateLimit:
         raw_key = request.headers.get("X-API-Key")
         client = hash_key(raw_key) if raw_key else (request.client.host if request.client else "local")
         request.app.state.rate_windows.hit(self.scope, client, calls, seconds)
+
+# --- Extraction jobs -----------------------------------------------------------
+
+
+class JobGate:
+    """
+    At most `running` extraction jobs run at once (Docling, the LLM and the
+    uploaded files in memory); `queued` more may wait. Beyond that a request is
+    refused at once with 503 instead of piling up. In-process, like RateLimit.
+    """
+
+    def __init__(self, running: int, queued: int):
+        self.slots = asyncio.Semaphore(max(1, running))
+        self.capacity = max(1, running) + max(0, queued)
+        self.held = 0  # running + waiting
+
+    @asynccontextmanager
+    async def slot(self) -> AsyncIterator[None]:
+        if self.held >= self.capacity:
+            raise HTTPException(503, "The server is busy with other documents. Retry shortly.",
+                                headers={"Retry-After": "30"})
+        self.held += 1
+        try:
+            async with self.slots:
+                yield
+        finally:
+            self.held -= 1
+
+
+async def job_slot(request: Request) -> AsyncIterator[None]:
+    """Dependency: hold an extraction slot for the rest of the request (uploads are read inside it)."""
+    async with request.app.state.jobs.slot():
+        yield
+
+
+# --- Request body ----------------------------------------------------------------
+
+
+class BodyLimit:
+    """
+    ASGI middleware counting request body bytes as they arrive, so the limit
+    holds without (or despite) a Content-Length header: `bulk_max_total_mb`
+    for the bulk route, `max_upload_mb` elsewhere, plus room for multipart
+    headers. Raises 413 from inside the body read.
+    """
+
+    def __init__(self, app, settings: Settings):
+        self.app, self.settings = app, settings
+
+    def limit(self, path: str) -> int:
+        mb = self.settings.bulk_max_total_mb if path.endswith("/bulk") else self.settings.max_upload_mb
+        return mb * MB + 64 * 1024
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        limit, seen = self.limit(scope["path"]), 0
+
+        async def counted():
+            nonlocal seen
+            message = await receive()
+            seen += len(message.get("body", b""))
+            if seen > limit:
+                raise HTTPException(413, f"Request exceeds the {limit // MB} MB limit.")
+            return message
+
+        await self.app(scope, counted, send)
+
 
 # --- Uploads -------------------------------------------------------------------
 
