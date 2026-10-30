@@ -1,7 +1,7 @@
 """End-to-end tests through the real models (Docling + tev1 + extraction LLM).
 
 Skipped automatically when Ollama or the configured models are missing.
-Regenerate the sample documents with `uv run python -m scripts.generate_samples`.
+Real redacted documents go in `tests/samples/redacted/` (see the README, Testing).
 """
 
 from __future__ import annotations
@@ -118,15 +118,13 @@ def test_bulk_finds_and_extracts_every_form(api, doc, expected):
     scored = score_forms(expected, file["forms"])
     assert scored["forms_found"] == len(expected), scored
     for want, got, entry in zip(expected, file["forms"], scored["forms"]):
-        assert entry["identified"], entry
-        if want["fields"] is None:
-            assert got["status"] == "unsupported"
+        assert entry["identified"], entry  # type, pages and status (ok / duplicate / unsupported)
+        if entry["status"] != "ok":
             continue
-        assert got["status"] == "ok"
-        kind = "scan" if "_scan" in doc.stem else "digital"
+        # Real redacted documents are held to the scan bar: phone photos, faxes, issuer layouts.
+        kind = "digital" if "_scan" not in doc.stem and "redacted" not in doc.parts else "scan"
         assert entry["field_accuracy"] >= MIN_ACCURACY[kind], entry
         for path in CRITICAL[want["document_type"]]:
             assert not any(e["path"] == path for e in entry["errors"]), f"critical field {path}: {entry['errors']}"
         if want["document_type"] == "1099_b":  # transactions come from the table reader, row for row
             assert len(got["fields"]["transactions"]) == len(want["fields"]["transactions"])
-

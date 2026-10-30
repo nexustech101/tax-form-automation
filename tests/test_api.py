@@ -236,3 +236,58 @@ def test_bulk_requires_a_key(api):
     r = api.client.post("/v1/documents/extract/bulk", files=[("files", ("a.pdf", PDF, "application/pdf"))])
     assert r.status_code == 401
 
+
+def _multipart(size: int, chunk: int = 64 * 1024):
+    """A multipart upload (field `file`) streamed in chunks, without a Content-Length header."""
+    boundary = "b0undary"
+    yield (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"big.pdf\"\r\n"
+           "Content-Type: application/pdf\r\n\r\n%PDF-").encode()
+    for _ in range(size // chunk):
+        yield b"0" * chunk
+    yield f"\r\n--{boundary}--\r\n".encode()
+
+
+def test_body_limit_counts_bytes_without_content_length(api):
+    headers = {**api.headers, "Content-Type": "multipart/form-data; boundary=b0undary"}
+    r = api.client.post("/v1/documents/extract", content=_multipart(2 * 1024 * 1024), headers=headers)
+    assert "content-length" not in {k.lower() for k in r.request.headers}
+    assert r.status_code == 413, r.text
+    assert r.json()["error"]["code"] == "payload_too_large"
+    r = api.client.post("/v1/documents/extract", content=_multipart(256 * 1024), headers=headers)
+    assert r.status_code == 200, r.text  # under the 1 MB test limit
+
+
+def test_extraction_beyond_running_and_queued_jobs_is_refused(api):
+    gate = api.client.app.state.jobs
+    gate.held = gate.capacity  # every slot running or queued
+    r = api.client.post("/v1/documents/extract", files=upload(), headers=api.headers)
+    assert r.status_code == 503 and r.json()["error"]["code"] == "busy"
+    assert r.headers["Retry-After"] == "30"
+    gate.held = 0
+    assert api.client.post("/v1/documents/extract", files=upload(), headers=api.headers).status_code == 200
+    assert gate.held == 0  # the slot is released after the request
+
+
+def test_job_gate_runs_at_most_n_and_queues_the_rest():
+    import asyncio
+
+    from api.deps import JobGate
+
+    async def scenario():
+        gate, running, peak = JobGate(running=2, queued=1), 0, 0
+
+        async def job():
+            nonlocal running, peak
+            async with gate.slot():
+                running += 1
+                peak = max(peak, running)
+                await asyncio.sleep(0.01)
+                running -= 1
+
+        results = await asyncio.gather(*(job() for _ in range(4)), return_exceptions=True)
+        return peak, [type(r).__name__ for r in results]
+
+    peak, results = asyncio.run(scenario())
+    assert peak == 2
+    assert results.count("HTTPException") == 1  # 2 running + 1 queued; the 4th is refused
+

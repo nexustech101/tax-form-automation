@@ -141,7 +141,7 @@
         },
         "phone": null
       },
-      "federal_income_tax_withheld": 0.0,
+      "federal_income_tax_withheld": null,
       "profit_or_loss_on_closed_contracts": null,
       "aggregate_profit_or_loss_on_contracts": null,
       "bartering": null,

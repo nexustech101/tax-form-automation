@@ -6,10 +6,17 @@ integration tests and runnable on its own for a full report:
     uv run python -m tests.evaluate [--samples tests/samples] [--out tests/reports/latest.json] [--only w2 stack]
 
 Single-form samples go through `/v1/documents/extract`; multi-form files
-(`<name>.forms.json` ground truth: stack, consolidated statement) go through
+(`<name>.forms.json` ground truth: stack, consolidated statement, and any
+real redacted document under `samples/redacted/`) go through
 `/v1/documents/extract/bulk` and are scored form by form, including whether
-each form's type and pages were found. It drives the real API (TestClient),
-so the measured path is the shipped path.
+each form's type, pages and status (`ok`, `duplicate`, `unsupported`) were
+found. It drives the real API (TestClient), so the measured path is the
+shipped path.
+
+Scoring: a field counts when either side has a value. Missing values (null,
+empty text, empty list) on both sides are not scored. Zero is a value, so
+0.00 against null is an error. An unchecked box (false) and a box that was
+not read (null) are equal: on paper they look the same.
 """
 
 from __future__ import annotations
@@ -34,10 +41,17 @@ class FieldResult:
         return _same(self.expected, self.actual)
 
 
+def _missing(value: Any) -> bool:
+    """No value: null, empty text, empty list, or an unchecked box. Zero is a value."""
+    return value is None or value is False or value == "" or value == []
+
+
 def _same(expected: Any, actual: Any) -> bool:
-    if expected in (None, False, [], "") and actual in (None, False, [], ""):
-        return True  # unchecked box / blank value
-    if isinstance(expected, float) or isinstance(actual, float):
+    if _missing(expected) or _missing(actual):
+        return _missing(expected) and _missing(actual)
+    if isinstance(expected, bool) or isinstance(actual, bool):
+        return expected is actual
+    if isinstance(expected, (int, float)) or isinstance(actual, (int, float)):
         try:
             return abs(float(expected) - float(actual)) < 0.005
         except (TypeError, ValueError):
@@ -63,7 +77,7 @@ def compare(expected: Any, actual: Any, path: str = "") -> list[FieldResult]:
             out += compare(expected[i] if i < len(expected) else None,
                            actual[i] if i < len(actual) else None, f"{path}[{i}]")
         return out
-    if expected in (None, False, "") and actual in (None, False, ""):
+    if _missing(expected) and _missing(actual):
         return []
     return [FieldResult(path, expected, actual)]
 
@@ -81,15 +95,27 @@ def documents(samples: Path = SAMPLES) -> list[tuple[str, Path, Path]]:
     return out
 
 
+DOCUMENT_SUFFIXES = (".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp")
+
+
 def multi_documents(samples: Path = SAMPLES) -> list[tuple[Path, list[dict]]]:
-    """(document, expected forms) for every multi-form file and its scan."""
+    """
+    (document, expected forms) for every `<name>.forms.json` under `samples`
+    (subfolders included): the document is `<name>.<any image/PDF suffix>`,
+    plus `<name>_scan.pdf` when present.
+    """
     out = []
-    for truth in sorted(samples.glob("*.forms.json")):
+    for truth in sorted(samples.rglob("*.forms.json")):
         name = truth.name.removesuffix(".forms.json")
-        for doc in (samples / f"{name}.pdf", samples / f"{name}_scan.pdf"):
-            if doc.exists():
-                out.append((doc, json.loads(truth.read_text())))
+        expected = json.loads(truth.read_text())
+        candidates = [truth.parent / f"{name}{suffix}" for suffix in DOCUMENT_SUFFIXES] + [truth.parent / f"{name}_scan.pdf"]
+        out += [(doc, expected) for doc in candidates if doc.exists()]
     return out
+
+
+def expected_status(want: dict) -> str:
+    """Truth entries may set `status`; otherwise forms with fields are `ok` and forms without are `unsupported`."""
+    return want.get("status") or ("ok" if want.get("fields") else "unsupported")
 
 
 def score_forms(expected: list[dict], forms: list[dict]) -> dict:
@@ -97,11 +123,13 @@ def score_forms(expected: list[dict], forms: list[dict]) -> dict:
     report = {"forms_expected": len(expected), "forms_found": len(forms), "forms": []}
     for i, want in enumerate(expected):
         got = forms[i] if i < len(forms) else None
-        entry = {"document_type": want["document_type"], "pages": want["pages"],
-                 "found_type": got and got["document_type"], "found_pages": got and got["pages"]}
-        entry["identified"] = bool(got) and got["document_type"] == want["document_type"] and got["pages"] == want["pages"]
-        if want["fields"] and got and got.get("fields"):
-            results = compare(want["fields"], got["fields"])
+        entry = {"document_type": want["document_type"], "pages": want["pages"], "status": expected_status(want),
+                 "found_type": got and got["document_type"], "found_pages": got and got["pages"],
+                 "found_status": got and got["status"]}
+        entry["identified"] = bool(got) and (got["document_type"], got["pages"], got["status"]) == (
+            want["document_type"], want["pages"], entry["status"])
+        if want.get("fields"):
+            results = compare(want["fields"], (got or {}).get("fields") or {})
             wrong = [f for f in results if not f.ok]
             entry["field_accuracy"] = 1 - len(wrong) / max(len(results), 1)
             entry["errors"] = [f.__dict__ for f in wrong]

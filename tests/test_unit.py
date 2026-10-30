@@ -1,4 +1,4 @@
-"""Fast tests: parsers, schemas, layout pairing, grounding. No models needed."""
+"""Fast tests: parsers, schemas, layout, checkboxes, tables, splitting, verification, evaluator. No models."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from decimal import Decimal
 
 import pytest
 
-from core.extractor import field_guide, ground, llm_schema, validate_leniently
+from core.extractor import field_guide, llm_schema, validate_leniently
 from core.forms import FORMS, W2, Form1099NEC, ScheduleK1_1065, SSA1099, form_labels
 from core.layout import Block, pair_blocks, render_evidence
 from core.parser import UnsupportedDocument, sniff
@@ -97,18 +97,96 @@ def test_validate_leniently_drops_only_bad_values():
     assert len(warnings) == 2
 
 
-def test_grounding_removes_values_not_in_document():
-    form = Form1099NEC.model_validate({
-        "nonemployee_compensation": "24,750.00",
-        "federal_income_tax_withheld": "999.99",
-        "payer": {"name": "Acme", "tin": "27-4410983"},
-        "recipient": {"name": "Dev", "tin": "XXX-XX-4417"},
-    })
-    text = "PAYER'S TIN 27-4410983\nRECIPIENT'S TIN XXX-XX-4417\n1 Nonemployee compensation 24,750.00"
-    dropped = ground(form, text)
-    assert dropped == ["federal_income_tax_withheld"]
-    assert form.nonemployee_compensation == Decimal("24750.00")
-    assert form.payer.tin == "27-4410983"
+def _nec_page(fed_tax="0.00"):
+    """A 1099-NEC laid out like the real form: labels top-left of their boxes, values below."""
+    blocks = [
+        Block(1, 10, 100, 200, 110, "PAYER'S TIN"), Block(1, 30, 115, 140, 125, "27-4410983"),
+        Block(1, 250, 100, 450, 110, "RECIPIENT'S TIN"), Block(1, 270, 115, 380, 125, "XXX-XX-4417"),
+        Block(1, 500, 100, 700, 110, "1 Nonemployee compensation"), Block(1, 600, 115, 690, 125, "24,750.00"),
+        Block(1, 750, 100, 950, 110, "4 Federal income tax withheld"),
+    ]
+    if fed_tax:
+        blocks.append(Block(1, 880, 115, 940, 125, fed_tax))
+    return pair_blocks(blocks, form_labels(Form1099NEC))
+
+
+def _nec(**values):
+    base = {"payer": {"name": "Acme", "tin": "27-4410983"}, "recipient": {"name": "Dev", "tin": "XXX-XX-4417"},
+            "nonemployee_compensation": "24,750.00", "federal_income_tax_withheld": "0.00"}
+    return Form1099NEC.model_validate({**base, **values})
+
+
+def test_verify_keeps_values_under_their_own_label_and_records_where():
+    from core.grounding import verify
+
+    form = _nec()
+    result = verify(form, _nec_page())
+    assert result.dropped == [] and result.warnings == []
+    assert form.federal_income_tax_withheld == Decimal("0.00")  # a printed zero is a value
+    src = result.sources["nonemployee_compensation"]
+    assert (src.label, src.page, src.box) == ("1 Nonemployee compensation", 1, (600.0, 115.0, 690.0, 125.0))
+    assert result.sources["recipient.tin"].label == "RECIPIENT'S TIN"
+
+
+def test_verify_removes_values_not_printed_including_zero():
+    from core.grounding import verify
+
+    form = _nec(federal_income_tax_withheld="0.00")
+    result = verify(form, _nec_page(fed_tax=None))  # box 4 is blank: the model's 0.00 is invented
+    assert result.dropped == ["federal_income_tax_withheld"]
+    assert form.federal_income_tax_withheld is None
+    assert "not printed" in result.warnings[0]
+
+
+def test_verify_removes_swapped_values():
+    from core.grounding import verify
+
+    form = _nec(nonemployee_compensation="0.00", federal_income_tax_withheld="24,750.00")  # boxes 1 and 4 swapped
+    result = verify(form, _nec_page())
+    assert set(result.dropped) == {"nonemployee_compensation", "federal_income_tax_withheld"}
+    assert any("printed under '1 Nonemployee compensation', not under its own label" in w for w in result.warnings)
+
+
+def test_verify_keeps_but_flags_a_value_whose_label_is_not_on_the_page():
+    from core.grounding import verify
+
+    page = [b for b in _nec_page() if b.text != "4 Federal income tax withheld"]
+    page = pair_blocks([Block(b.page, b.left, b.top, b.right, b.bottom, b.text) for b in page], form_labels(Form1099NEC))
+    form = _nec()
+    result = verify(form, page)
+    assert form.federal_income_tax_withheld == Decimal("0.00")
+    assert result.warnings == ["federal_income_tax_withheld: 0.00 is printed in the document, but not in its labeled box; check it"]
+
+
+def test_verify_warnings_never_show_a_full_tin():
+    from core.grounding import verify
+
+    form = _nec(recipient={"name": "Dev", "tin": "412-56-7890"})  # not the TIN printed on the page
+    result = verify(form, _nec_page())
+    assert result.dropped == ["recipient.tin"]
+    assert result.warnings == ["recipient.tin: removed, TIN ending 7890 is not printed in the document"]
+
+
+def test_verify_checks_list_rows_under_their_column_labels():
+    from core.grounding import verify
+
+    blocks = [Block(1, 10, 100, 200, 110, "Letter code printed next to the amount"), Block(1, 300, 100, 400, 110, "Amount"),
+              Block(1, 30, 115, 50, 125, "D"), Block(1, 330, 115, 390, 125, "4,087.45"),
+              Block(1, 500, 100, 700, 110, "1 Wages, tips, other compensation"), Block(1, 600, 115, 690, 125, "68,412.55")]
+    form = W2.model_validate({"wages_tips_other_comp": "68,412.55", "box12": [{"code": "D", "amount": "4,087.45"}]})
+    result = verify(form, pair_blocks(blocks, form_labels(W2)))
+    assert result.dropped == [] and result.sources["box12[0].amount"].label == "Amount"
+
+
+def test_verify_takes_table_rows_from_their_printed_lines():
+    from core.forms import Form1099B
+    from core.grounding import verify
+
+    line = [Block(2, 40, 120, 200, 130, "100 SH APPLE INC"), Block(2, 520, 120, 590, 130, "19,450.00")]
+    form = Form1099B.model_validate({"transactions": [{"description": "100 SH APPLE INC", "proceeds": "19,450.00"}]})
+    result = verify(form, [], table_lines={"transactions": [line]})
+    assert result.dropped == []
+    assert result.sources["transactions[0]"].box == (40.0, 120.0, 590.0, 130.0)
 
 
 def test_consistency_checks():
@@ -439,4 +517,94 @@ def test_heading_classifier_needs_no_model():
     c = asyncio.run(HeadingClassifier().classify("PAYER'S TIN 12-3456789\n2025 Form 1099-INT Interest Income\n1 Interest income 5.00"))
     assert (c.document_type, c.model) == ("1099_int", "headings")
     assert asyncio.run(HeadingClassifier().classify("INVOICE #10442\nTotal due $949.50")).document_type == "unknown"
+
+
+# --- duplicate identity ----------------------------------------------------------------------
+
+
+def test_identity_covers_tax_year_and_transaction_rows():
+    from core.forms import Form1099B
+    from core.pipeline import identity
+
+    base = {"tax_year": 2025, "payer": {"name": "Lakeview", "tin": "41-1228890"}, "account_number": "5521-0098",
+            "transactions": [{"description": "100 SH APPLE INC", "proceeds": "19,450.00", "cost_basis": "17,210.00"}]}
+    other_sale = {**base, "transactions": [{"description": "50 SH MSFT", "proceeds": "2,900.00", "cost_basis": "3,400.00"}]}
+    other_year = {**base, "tax_year": 2024}
+    key = identity(Form1099B.model_validate(base))
+    assert key == identity(Form1099B.model_validate(base))  # a true copy
+    assert key != identity(Form1099B.model_validate(other_sale))
+    assert key != identity(Form1099B.model_validate(other_year))
+
+
+def test_identity_needs_a_tin_or_amount():
+    from core.pipeline import identity
+
+    assert identity(W2.model_validate({"tax_year": 2025, "control_number": "A1"})) is None
+    assert identity(W2.model_validate({"wages_tips_other_comp": "0.00"})) is not None
+
+
+# --- evidence chunks -----------------------------------------------------------------------
+
+
+def test_chunks_fit_the_token_budget_and_keep_page_markers():
+    from core.extractor import LLMExtractor, estimate_tokens
+
+    blocks = [Block(p, 10, 20 + 12 * i, 400, 30 + 12 * i, f"{i} SH FUND {i} 12,345.67 9,876.54 2,469.13")
+              for p in (1, 2) for i in range(80)]
+    chunks = LLMExtractor.chunks(pair_blocks(blocks, []), budget=400)
+    assert len(chunks) > 2
+    assert all(estimate_tokens(c) <= 400 for c in chunks)
+    assert all(c.startswith("--- page ") for c in chunks)
+    joined = "\n".join(chunks)
+    assert all(b.text in joined for b in blocks)  # nothing lost
+
+
+def test_evidence_budget_leaves_room_for_prompt_and_answer():
+    from core.config import get_settings
+    from core.extractor import ExtractorUnavailable, LLMExtractor
+
+    settings = get_settings().model_copy(update={"extractor_num_ctx": 8192, "extractor_output_tokens": 2048})
+    budget = LLMExtractor(settings, client=object()).evidence_budget(ScheduleK1_1065, frozenset())
+    assert 0 < budget < (8192 - 2048) * 0.9
+    tiny = settings.model_copy(update={"extractor_num_ctx": 2048})
+    with pytest.raises(ExtractorUnavailable, match="EXTRACTOR_NUM_CTX"):
+        LLMExtractor(tiny, client=object()).evidence_budget(ScheduleK1_1065, frozenset())
+
+
+def test_estimate_tokens_counts_every_digit():
+    from core.extractor import estimate_tokens
+
+    assert estimate_tokens("68,412.55") >= 7
+    assert estimate_tokens("Wages, tips, other compensation") <= 11
+
+
+# --- evaluator ------------------------------------------------------------------------------
+
+
+def test_evaluator_scores_zero_against_missing_as_an_error():
+    from tests.evaluate import compare
+
+    wrong = [r for r in compare({"a": 0.0, "b": None, "c": 5.0}, {"a": None, "b": 0.0, "c": 5}) if not r.ok]
+    assert [r.path for r in wrong] == ["a", "b"]
+    assert compare({"a": 0.0}, {"a": 0})[0].ok
+
+
+def test_evaluator_treats_unchecked_and_unread_boxes_alike_but_not_checked():
+    from tests.evaluate import compare
+
+    assert compare({"box": False, "rows": []}, {"box": None, "rows": None}) == []
+    assert not compare({"box": True}, {"box": None})[0].ok
+    assert not compare({"box": False}, {"box": True})[0].ok
+
+
+def test_score_forms_checks_status_and_missing_fields():
+    from tests.evaluate import score_forms
+
+    expected = [{"document_type": "w2", "pages": [1], "fields": {"wages_tips_other_comp": 10.0}},
+                {"document_type": "w2", "pages": [2], "status": "duplicate", "fields": {"wages_tips_other_comp": 10.0}}]
+    found = [{"document_type": "w2", "pages": [1], "status": "ok", "fields": {"wages_tips_other_comp": 10.0}},
+             {"document_type": "w2", "pages": [2], "status": "ok", "fields": None}]
+    a, b = score_forms(expected, found)["forms"]
+    assert a["identified"] and a["field_accuracy"] == 1.0
+    assert not b["identified"] and b["field_accuracy"] == 0.0
 

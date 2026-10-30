@@ -104,6 +104,18 @@ await test('split forms: unreadable file -> problem with the API error code', as
   assert.equal(out[0].json.doc.document_id, settingsOut[0].json.document_id);
 });
 
+await test('split forms: unread pages -> one problem per file; explained as needs_review with partial note', async () => {
+  const out = await run('Split Forms', [{ json: { statusCode: 200, body: fx.bulk_partial } }], { 'Firm Settings': settingsOut });
+  const unread = out.filter((o) => o.json.problem?.code === 'missing_pages');
+  assert.equal(unread.length, 1);
+  assert.equal(unread[0].json.doc.document_id, `${settingsOut[0].json.document_id}-unread`);
+  const r = (await run('Explain Failure', unread, { 'Firm Settings': settingsOut }))[0].json.record;
+  assert.equal(r.status, 'needs_review');
+  assert.equal(r.pages, '4');
+  assert.match(r.summary, /page\(s\) 4 .*only partly converted/);
+  assert.equal(split.filter((o) => o.json.problem?.code === 'missing_pages').length, 0, 'complete file reported unread pages');
+});
+
 let reviewIn;
 await test('prepare review: TINs masked, form position flagged', async () => {
   const out = await run('Prepare Review', [split[0]]);
