@@ -23,8 +23,8 @@ from core.config import Settings, get_settings  # noqa: E402
 SAMPLES = Path(__file__).parent / "samples"
 
 
-def make_test_app(settings: Settings | None = None, pipeline=None, load_models: bool = False):
-    """(app, raw admin key). Creates tables and an admin key directly."""
+def make_test_app(settings: Settings | None = None, pipeline=None, load_models: bool = False, assistant=None):
+    """(app, raw admin key). Creates tables and an admin key directly. `assistant`: (library, assistant)."""
     from api.app import create_app
     from core.auth import create_api_key
     from core.db import init_db
@@ -32,7 +32,7 @@ def make_test_app(settings: Settings | None = None, pipeline=None, load_models: 
     init_db()
     raw, _ = create_api_key("test-admin", is_admin=True)
     app = create_app(settings or get_settings(), pipeline=pipeline, load_models=load_models,
-                     dispose_db_on_shutdown=False)
+                     dispose_db_on_shutdown=False, assistant=assistant)
     return app, raw
 
 

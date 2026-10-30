@@ -1,7 +1,7 @@
 # Disclaimer and limitation of liability
 
-This document applies to the Tax Document API, the n8n intake workflow in
-`n8n/`, and everything they produce (together, "the Software"). It is a
+This document applies to the Tax Document API (including its document library
+and AI assistant), the n8n intake workflow in `n8n/`, and everything they produce (together, "the Software"). It is a
 template written by the developer, not legal advice. Have an attorney
 licensed in your state review it, and the contract it is attached to, before
 relying on it.
@@ -11,8 +11,10 @@ relying on it.
 The Software reads tax documents and reports what is printed on them. It does
 not prepare returns, give tax, legal or accounting advice, or make filing
 decisions. The notes written by the n8n "Accountant Assistant" (summaries,
-issues, client questions, where amounts are usually reported) are suggestions
-for a qualified preparer to check, not advice. The Software is not affiliated
+issues, client questions, where amounts are usually reported) and the answers
+of the API's document assistant are suggestions for a qualified preparer to
+check, not advice. The assistant answers from excerpts it retrieves; it can
+miss a document, cite the wrong one, or misstate what an excerpt says. The Software is not affiliated
 with or endorsed by the IRS or any government agency.
 
 ## 2. Every value must be reviewed by a qualified person
@@ -64,18 +66,29 @@ The Software runs on systems the client controls. The client is responsible for:
   information security plan under the FTC Safeguards Rule (see IRS
   Publication 5708) and the IRS data-security guidance for tax professionals
   (Publication 4557);
-* how long documents and extracted data are kept, and their deletion;
+* how long documents and extracted data are kept, and their deletion,
+  including the document library database and its backups;
 * obtaining any consent its clients' documents require before they are processed;
 * the licenses of third-party components it runs, including n8n and the
   model weights (see `THIRD_PARTY_LICENSES.md`).
 
 ## 6. Data handling, as designed
 
-* The API does not store uploaded documents or extracted values; it stores only
-  hashed API keys. Logs carry request ids, timings, form types and counts, not
-  document text or values.
+* The extraction routes do not store uploaded documents or extracted values.
+  The API-key database stores only hashed keys and their metadata. Logs carry
+  request ids, timings, form types and counts, not document text or values.
+* Documents added to the document library (`/v1/library/documents`) are stored
+  as searchable text and extracted fields in the library database
+  (`library.database` in `config/model_config.yml`), with Social Security
+  numbers masked to the last four digits before storage. Names, addresses,
+  amounts and employer identification numbers are stored as printed. The
+  original file is not kept. Each API key sees only the documents it added;
+  admin keys see all of them. Documents stay until deleted through the API.
 * Models run locally through Ollama; documents are not sent to an outside AI
-  service unless the client reconfigures the workflow to use one.
+  service unless the client reconfigures the workflow or
+  `config/model_config.yml` to use one. When the assistant is configured with
+  a cloud provider, that provider receives the questions asked and the
+  library excerpts retrieved to answer them.
 * The n8n workflow masks tax identification numbers to the last four digits
   before they reach the AI assistant, the log table or any email or chat alert.
 

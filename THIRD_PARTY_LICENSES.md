@@ -2,7 +2,7 @@
 
 What this project runs on, under which license, and what that means when the
 system is delivered to a client. The project's own code (`api/`, `core/`,
-`scripts/`, `tests/`, `n8n/`) is not covered here; its owner sets its license.
+`agent/`, `scripts/`, `tests/`, `n8n/`) is not covered here; its owner sets its license.
 
 Versions are the ones locked in `uv.lock`. Licenses are taken from each
 package's own metadata and license files (regenerate the list with the
@@ -13,7 +13,7 @@ command at the end), and from the model cards for model weights.
 | | Risk for commercial delivery |
 |---|---|
 | Python packages | None found. All are permissive (MIT, BSD, Apache-2.0, PSF, MIT-CMU). Keep their notices when you redistribute them. |
-| Docling layout model, RapidOCR models, Qwen3.5 | None found. Apache-2.0. |
+| Docling layout model, RapidOCR models, Qwen3.5, nomic-embed-text | None found. Apache-2.0. |
 | **tev1** (classifier) | **Unresolved.** The publisher's model card says the weights' release license "is being finalized"; the model is labelled experimental. See [tev1](#tev1). Set `TEV_MODEL=none` to run without it. |
 | **n8n** | **Conditions apply.** Sustainable Use License: you may build and maintain workflows for a client on *their* n8n; you may not host n8n for clients so they can build workflows. See [n8n](#n8n). |
 
@@ -25,15 +25,18 @@ Direct dependencies (`pyproject.toml`):
 |---|---|---|---|
 | docling | 2.143.0 | MIT | PDF / image parsing, layout, OCR orchestration |
 | fastapi | 0.162.0 | MIT | HTTP API |
+| httpx | 0.28.1 | BSD-3-Clause | Assistant's calls to chat and embedding providers |
 | uvicorn | 0.54.0 | BSD-3-Clause | ASGI server |
 | pydantic-settings | 2.16.1 | MIT | `.env` / environment settings |
 | python-multipart | 0.0.32 | Apache-2.0 | File uploads |
 | ollama | 0.6.3 | MIT | Client for the local models |
 | onnxruntime | 1.31.1 | MIT | Runs the OCR models |
+| openpyxl | 3.1.5 | MIT | Reading .xlsx files into the document library |
 | opencv-python-headless | 5.0.0.93 | Apache-2.0 (bundles third-party code, see its `LICENSE-3RD-PARTY.txt`) | Checkbox and cell-rule detection |
 | numpy | 2.5.4 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | Page images |
 | pillow | 13.0.0 | MIT-CMU | Image decoding |
 | pypdfium2 | 5.14.0 | BSD-3-Clause, Apache-2.0 (PDFium) | PDF text layer, page rendering |
+| pyyaml | 6.0.3 | MIT | Reading `config/model_config.yml` |
 | registers | 7.5.0 | MIT | API-key store |
 | sqlmodel | 0.0.48 | MIT | Database layer under `registers` |
 | typing-extensions | 4.16.0 | PSF-2.0 | Typing back-ports |
@@ -47,7 +50,8 @@ Notable packages installed with the above:
 | torch / torchvision | 2.14.1 / 0.29.1 | Apache-2.0 AND BSD-2/3-Clause AND BSL-1.0 AND MIT (torch); BSD (torchvision) |
 | transformers / huggingface-hub / safetensors | 5.21.0 / 1.33.0 / 0.8.0 | Apache-2.0 |
 | scipy | 1.18.1 | BSD-3-Clause |
-| starlette / httpx | 1.10.0 / 0.28.1 | BSD-3-Clause |
+| starlette | 1.10.0 | BSD-3-Clause |
+| et-xmlfile (with openpyxl) | 2.0.0 | MIT |
 | pydantic | 2.14.1 | MIT |
 | sqlalchemy | 2.1.6 | MIT |
 | python-dotenv | 1.2.4 | BSD-3-Clause |
@@ -61,7 +65,8 @@ reportlab 5.1.0 (BSD), used to generate the synthetic sample forms.
 |---|---|---|---|
 | Docling layout model "heron" | Hugging Face `docling-project/docling-layout-heron`, downloaded on first start (or `main.py download-models`) | Apache-2.0 (model card) | |
 | PP-OCRv6 small detection / recognition, `ch_ppocr_mobile_v2.0_cls` | Bundled in the `rapidocr` wheel | Apache-2.0; weights © Baidu / PaddleOCR rights holders | RapidOCR's `MODEL_LICENSES.md` lists the files and their SHA-256. Redistribution must keep the Apache-2.0 notices. The direction classifier is not used (`use_cls=False`). |
-| Qwen3.5 4B (`qwen3.5:4b`) | Ollama library | Apache-2.0 (Alibaba Cloud / Qwen team) | Field mapping and the n8n Accountant Assistant |
+| Qwen3.5 4B (`qwen3.5:4b`) | Ollama library | Apache-2.0 (Alibaba Cloud / Qwen team) | Field mapping, the document assistant and the n8n Accountant Assistant |
+| nomic-embed-text v1.5 (`nomic-embed-text`) | Ollama library (publisher: Nomic AI) | Apache-2.0 (model card) | Document library search embeddings |
 | tev1 / tev1:0.8b | Ollama library (publisher: Together AI) | Not final, see below | Form classification |
 
 ### tev1
@@ -101,6 +106,13 @@ license FAQ:
 Deliver the workflow for the client's own n8n (self-hosted or their own n8n
 Cloud account) and charge for the build and maintenance.
 
+### Cloud model providers (optional)
+
+The assistant can be pointed at OpenAI, Anthropic or OpenRouter in
+`config/model_config.yml`. No SDK is used, so nothing of theirs is installed;
+their API terms (data use, retention, the client's own account and agreement
+with them) apply instead. The shipped configuration uses local Ollama only.
+
 ## When you deliver the system
 
 * Installing with `uv sync` on the client's machine downloads each package
@@ -125,5 +137,6 @@ uv run python -m scripts.licenses
 * tev1 on Ollama: https://ollama.com/library/tev1 · license file of the Ollama package: https://ollama.com/library/tev1:0.8b/blobs/ff9fd7d3f054
 * tev1 license question: https://github.com/togethercomputer/tev1/issues/2
 * Qwen3.5-4B: https://llm-stats.com/models/qwen3.5-4b
+* nomic-embed-text: https://ollama.com/library/nomic-embed-text · https://huggingface.co/nomic-ai/nomic-embed-text-v1.5
 * Docling layout model card: https://huggingface.co/docling-project/docling-layout-heron
 * RapidOCR model licenses: `MODEL_LICENSES.md` in the `rapidocr` package

@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     classify_rate_seconds: int = 60
     bulk_rate_calls: int = 10
     bulk_rate_seconds: int = 60
+    library_rate_calls: int = 30  # document uploads
+    library_rate_seconds: int = 60
+    search_rate_calls: int = 120
+    search_rate_seconds: int = 60
+    assistant_rate_calls: int = 30
+    assistant_rate_seconds: int = 60
+
+    # --- AI assistant (models, library database: see the YAML file) -----------
+    assistant_config: Path = PROJECT_ROOT / "config" / "model_config.yml"
 
     # --- Uploads ---------------------------------------------------------------
     max_upload_mb: int = 20  # per file

@@ -2,7 +2,7 @@
 
 FastAPI service for classifying and extracting data from 15 US tax form types. It accepts digital PDFs and scanned documents, separates supported forms, and returns typed JSON with validation warnings.
 
-The pipeline uses Docling for layout and OCR, Ollama for field extraction, and either printed headings or the tev1 model for classification. An optional n8n workflow handles intake and review.
+The pipeline uses Docling for layout and OCR, Ollama for field extraction, and either printed headings or the tev1 model for classification. An optional n8n workflow handles intake and review. A document library with an AI assistant answers questions about stored documents, using local models by default.
 
 Output requires human review against the source document. See [DISCLAIMER.md](DISCLAIMER.md) and [third-party licenses](THIRD_PARTY_LICENSES.md).
 
@@ -17,6 +17,7 @@ Optionally:
 ```sh
 ollama pull tev1
 ollama pull qwen3.5:4b
+ollama pull nomic-embed-text   # document library search
 ```
 
 Then,
@@ -44,6 +45,11 @@ Document routes require an `X-API-Key` header. Successful responses use a `data`
 | `POST /v1/documents/extract/bulk` | Client or admin key | Extract forms from one or more files |
 | `POST /v1/documents/classify` | Client or admin key | Classify a file or supplied text |
 | `GET /v1/document-types` | Client or admin key | List supported forms and their field schemas |
+| `POST /v1/library/documents` | Client or admin key | Add a document to the library |
+| `GET /v1/library/documents` | Client or admin key | List library documents |
+| `GET` / `DELETE /v1/library/documents/{id}` | Client or admin key | Read or delete one library document |
+| `POST /v1/library/search` | Client or admin key | Search the library |
+| `POST /v1/assistant/chat` | Client or admin key | Ask the assistant about library documents |
 | `GET /health` | None | Report parser and model readiness |
 | `GET /auth/me` | Client or admin key | Check the current key |
 | `POST /api-keys` | Admin key | Create a key |
@@ -108,10 +114,49 @@ This route returns one classification, using the configured classifier. Digital 
 | 401 / 403 | `unauthorized` / `forbidden` |
 | 413 | `payload_too_large`, `too_many_pages` |
 | 415 | `unsupported_media_type` |
+| 404 | `not_found` |
+| 409 | `index_mismatch` (library built with a different embedding model) |
 | 422 | `unreadable_document`, `unsupported_document_type`, `multiple_forms`, `invalid_request` |
 | 429 | `rate_limited` (includes `Retry-After`) |
 | 503 | `model_unavailable` (includes `Retry-After: 10`); `busy` when all extraction slots and the queue are taken (includes `Retry-After: 30`) |
 | 500 | `internal_error` |
+
+## Document library and assistant
+
+The library stores documents for search; the assistant answers questions from them. Both call model providers over plain HTTP (no SDKs), configured in [config/model_config.yml](config/model_config.yml): chat through the OpenAI-compatible API (Ollama, OpenAI, OpenRouter) or Anthropic's Messages API, embeddings through the OpenAI-compatible API. The shipped configuration is local: `qwen3.5:4b` and `nomic-embed-text` on Ollama. API keys for cloud providers are read from the environment variable named by `api_key_env`, never from the file.
+
+### Add and search documents
+
+```sh
+curl -H "X-API-Key: YOUR_CLIENT_KEY" -F "file=@tests/samples/w2.pdf" -F "client=Gonzalez" -F "tax_year=2025" http://localhost:8000/v1/library/documents
+curl -H "X-API-Key: YOUR_CLIENT_KEY" -H "Content-Type: application/json" -d '{"query": "wages and federal withholding", "filters": {"client": "Gonzalez", "tax_year": 2025}}' http://localhost:8000/v1/library/search
+```
+
+- Accepted: PDF and images (as above), `.txt`, `.md`, `.csv`, `.xlsx`. PDFs and images go through form extraction: each supported form is stored as its field values with its form ID and tax year; other pages are stored as page text. `extract=false` stores page text only (faster, no LLM). Up to `BULK_MAX_PAGES` pages.
+- Text files are split by Markdown heading, CSV and sheet rows (header repeated in each chunk), or paragraphs, into chunks of at most `library.chunk_chars`.
+- `client`, `tax_year`, `title` and `location` (where the original is kept) are optional metadata. Uploading the same file again returns the stored document (200 instead of 201) without re-processing.
+- Social Security numbers are masked to the last four digits before anything is stored or embedded. The original file is not kept.
+- Each key sees only the documents it added; admin keys see all of them.
+
+Search filters (`client`, `tax_year`, `document_type`, `document_ids`) are applied in the database first, so only matching chunks are scored. The remaining chunks are ranked twice, by embedding similarity (exact cosine, scored in batches) and by keywords (SQLite FTS5, which finds exact account numbers and names), and the two rankings are combined with reciprocal rank fusion. `similarity` in each hit is the cosine similarity, `null` for keyword-only matches. Exact scoring stays fast to several hundred thousand chunks per filter; beyond that, an approximate vector index can replace `Library._semantic` without changing the API.
+
+### Ask the assistant
+
+```sh
+curl -H "X-API-Key: YOUR_CLIENT_KEY" -H "Content-Type: application/json" -d '{"messages": [{"role": "user", "content": "What were Maria Gonzalez'"'"'s 2025 wages?"}], "scope": {"client": "Gonzalez"}}' http://localhost:8000/v1/assistant/chat
+```
+
+The route is stateless: send the conversation so far, ending with the user's message. The model searches with the `search_documents` tool (up to `assistant.max_tool_rounds` rounds, then it must answer) and cites excerpts as `[n]`; `data.sources` lists every retrieved excerpt under those numbers, with its document ID, page and similarity. `scope` limits every search; the model can narrow it but not widen it. `data.usage` reports the provider's token counts.
+
+Configuration notes:
+
+- Changing the embedding model or `dimensions` makes existing vectors incomparable; searches then return `409 index_mismatch`. Delete the library database (or use a new `library.database` path) and add the documents again.
+- `nomic-embed-text` expects the `search_query: ` / `search_document: ` prefixes set in the file; set both to `""` for other embedding models.
+- Ollama's OpenAI-compatible API cannot set the context size per request. If long answers or many excerpts get cut off, start the Ollama server with a larger `OLLAMA_CONTEXT_LENGTH` (e.g. `8192`).
+- `chat.options` adds fields to each request body as is (for example `reasoning_effort`); `max_completion_tokens` there replaces `max_tokens` for models that require it.
+- A provider that cannot be reached, or rejects the request, returns `503 model_unavailable` with its error in the message.
+
+Code: [agent/config.py](agent/config.py) (settings), [agent/ingest.py](agent/ingest.py) (files to chunks), [agent/rag.py](agent/rag.py) (embeddings, storage, search), [agent/tools.py](agent/tools.py) (the search tool), [agent/agent.py](agent/agent.py) (provider wire formats and the tool loop), [api/routes/library.py](api/routes/library.py) and [api/routes/assistant.py](api/routes/assistant.py). To add a tool, define its JSON schema and function in `agent/tools.py` and dispatch it in `Assistant._run`.
 
 ## Supported forms
 
@@ -180,6 +225,10 @@ Then set `DOCLING_ARTIFACTS_PATH=models/docling`. Ollama models must also be ava
 | `PIPELINE_RATE_CALLS` / `PIPELINE_RATE_SECONDS` | `30` / `60` | Single-extraction requests per key per window |
 | `BULK_RATE_CALLS` / `BULK_RATE_SECONDS` | `10` / `60` | Bulk requests per key per window |
 | `CLASSIFY_RATE_CALLS` / `CLASSIFY_RATE_SECONDS` | `120` / `60` | Classification requests per key per window |
+| `LIBRARY_RATE_CALLS` / `SEARCH_RATE_CALLS` / `ASSISTANT_RATE_CALLS` | `30` / `120` / `30` | Library uploads, searches and assistant requests per key per window (`*_RATE_SECONDS`, default `60`) |
+| `ASSISTANT_CONFIG` | `config/model_config.yml` | Assistant, embedding and library settings |
+
+Library uploads share the extraction job slots (`MAX_CONCURRENT_JOBS`).
 
 ## Architecture
 
@@ -201,6 +250,7 @@ Upload -> Docling parse/OCR -> split into forms -> classify
 | [core/grounding.py](core/grounding.py) | Checks amounts and TINs against their printed labels; records sources |
 | [core/forms.py](core/forms.py), [core/schema.py](core/schema.py), [core/utils.py](core/utils.py) | Form definitions, response models, normalization |
 | [core/auth.py](core/auth.py), [core/db.py](core/db.py), [core/models.py](core/models.py) | API-key storage and lifecycle |
+| [agent/](agent/) | Document library (chunking, embeddings, filtered hybrid search) and the assistant's provider clients and tool loop |
 | [tests/](tests/) | Unit/API tests, model integration tests, evaluator, synthetic fixtures |
 | [n8n/](n8n/) | Optional intake and review workflow |
 
@@ -220,7 +270,7 @@ Unit/API tests use synthetic data and a fake pipeline for HTTP behavior. Integra
 
 The evaluator writes `tests/reports/latest.json`. Fixtures cover digital and scanned forms, mixed stacks, and consolidated statements; 1099-B coverage is in the consolidated fixtures. A field is scored when either side has a value: zero is a value (`0.00` against `null` is an error), while `null`, `""`, `[]` and an unchecked box count as missing.
 
-Regression tests without models: verification (swapped, unprinted and zero values), duplicate identity and bulk duplicates, partial conversions and missing pages ([tests/test_pipeline.py](tests/test_pipeline.py)), evidence chunk budgets, the counted body limit and the job gate.
+Regression tests without models: the library and assistant with fake providers ([tests/test_assistant.py](tests/test_assistant.py): chunking, SSN masking, filters, key isolation, ranking, OpenAI and Anthropic request formats, the tool loop), verification (swapped, unprinted and zero values), duplicate identity and bulk duplicates, partial conversions and missing pages ([tests/test_pipeline.py](tests/test_pipeline.py)), evidence chunk budgets, the counted body limit and the job gate.
 
 Synthetic test results do not establish accuracy on client documents. Put representative redacted documents in `tests/samples/redacted/`: each file `<name>.pdf` (or an image) with `<name>.forms.json`, a list of `{"document_type", "pages", "fields"}` in page order, plus `"status": "duplicate"` for repeated copies; `"fields": null` marks a page that is not a supported form. The evaluator and `pytest -m integration` pick them up and hold them to the scan accuracy bar. Cover the layouts your clients send (payroll providers, brokerages, phone photos) and more than one tax year.
 
@@ -230,7 +280,8 @@ Synthetic test results do not establish accuracy on client documents. Put repres
 - Terminate TLS at a reverse proxy. Request bodies are counted as they arrive, with or without `Content-Length`; a proxy limit is still worth setting so oversized uploads stop before reaching the app.
 - At most `MAX_CONCURRENT_JOBS` extract/bulk requests run at once; each holds its uploaded files in memory (up to `BULK_MAX_TOTAL_MB`). Up to `MAX_QUEUED_JOBS` more wait with their uploads spooled to temporary disk. Classification is not gated (digital PDFs need no models; scans share Docling's `DOCLING_MAX_CONCURRENCY`).
 - `/health` returns HTTP 200 even when `data.status` is `degraded`. Read the body when checking readiness.
-- The application database stores API-key hashes and metadata, not extracted documents. Uploads are processed for the response; multipart handling may spool large uploads to temporary disk. Document evidence is sent to the configured Ollama server.
+- The application database stores API-key hashes and metadata, not extracted documents. Extraction uploads are processed for the response; multipart handling may spool large uploads to temporary disk. Document evidence is sent to the configured Ollama server.
+- The library database (`data/library.db` by default, gitignored) stores what is added to the library: chunk text, extracted fields and embeddings, with SSNs masked; names, addresses, amounts and EINs as printed. Treat it, and its backups, as taxpayer data. A cloud chat provider, if configured, receives the questions and the retrieved excerpts.
 - Application logs primarily contain request and processing metadata. Error messages and third-party diagnostics need review before making a strict no-sensitive-data logging guarantee.
 - Splitting is heuristic. Pages without text are reported in `missing_pages`, not dropped silently. Duplicates must match on every extracted value, so extraction noise can leave a real copy marked `ok` (a reviewer sees both); it no longer skips distinct forms.
 - Evidence is packed into chunks by an estimated token count (every digit counts as one token, other characters one per three) with a 10% margin, so prompt, evidence and answer fit `EXTRACTOR_NUM_CTX`. It is an estimate, not the model's tokenizer.

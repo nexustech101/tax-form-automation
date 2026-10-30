@@ -7,6 +7,8 @@ The document workflow and the process-wide model services.
 
 * `extract`: one file that holds one form. A file with several forms is
   refused with `MultipleForms`, pointing the caller at `extract_bulk`.
+* `extract_file`: every form in one file, with the parsed document (used by
+  the document library).
 * `extract_bulk`: any number of files, each holding any number of forms
   (stacks, consolidated statements). A file that can't be read is reported
   and the rest carry on; repeated copies of one form are marked `duplicate`.
@@ -260,11 +262,17 @@ class TaxDocumentPipeline:
 
     async def _extract_file(self, data: bytes, filename: str) -> FileResult:
         try:
-            doc = await self.parser.parse(data, filename, max_pages=self.settings.bulk_max_pages)
+            return (await self.extract_file(data, filename))[0]
         except tuple(FILE_ERRORS) as exc:
             code = next(code for kind, code in FILE_ERRORS.items() if isinstance(exc, kind))
             return FileResult(filename=filename, status="failed", error=ErrorBody(code=code, message=str(exc)))
 
+    async def extract_file(self, data: bytes, filename: str) -> tuple[FileResult, ParsedDocument]:
+        """
+        Every form in one file, plus the parsed document for callers that also
+        need its text (the document library). Parse errors are raised.
+        """
+        doc = await self.parser.parse(data, filename, max_pages=self.settings.bulk_max_pages)
         forms: list[FormResult] = []
         seen: dict[str, int] = {}
         for index, segment in enumerate(split(doc)):
@@ -290,7 +298,7 @@ class TaxDocumentPipeline:
                             "total": int((time.perf_counter() - started) * 1000)},
                 **common,
             ))
-        return FileResult(filename=filename, status="ok", document=_document_info(doc), forms=forms)
+        return FileResult(filename=filename, status="ok", document=_document_info(doc), forms=forms), doc
 
     async def extract_bulk(self, files: list[tuple[bytes, str]], request_id: str) -> BulkExtractResponse:
         started = time.perf_counter()
