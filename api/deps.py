@@ -18,6 +18,8 @@ from typing import Annotated, AsyncIterator, Optional
 from fastapi import Depends, HTTPException, Request, Security, UploadFile
 from fastapi.security import APIKeyHeader
 
+from agent.agent import Assistant
+from agent.rag import Library
 from core.auth import find_active_key, hash_key
 from core.config import Settings
 from core.models import ApiKey
@@ -57,8 +59,23 @@ def get_settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
+def get_library(request: Request) -> Library:
+    return request.app.state.library
+
+
+def get_assistant(request: Request) -> Assistant:
+    return request.app.state.assistant
+
+
+def owner_scope(key: ApiKey) -> str | None:
+    """Library documents a key may read: its own, or every key's for admin keys (None)."""
+    return None if key.is_admin else str(key.id)
+
+
 PipelineDep = Annotated[TaxDocumentPipeline, Depends(get_pipeline)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+LibraryDep = Annotated[Library, Depends(get_library)]
+AssistantDep = Annotated[Assistant, Depends(get_assistant)]
 
 # --- Rate limits -------------------------------------------------------------
 

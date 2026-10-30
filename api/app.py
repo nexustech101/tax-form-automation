@@ -10,6 +10,9 @@ middleware, error handlers and routers. Routes live in `api/routes/`.
     GET  /health                      readiness (no auth)
     GET  /auth/me                     check a key
     POST|GET|DELETE /api-keys         key management (admin)
+    POST|GET|DELETE /v1/library/documents[/{id}]   document library for the assistant
+    POST /v1/library/search           filtered semantic + keyword search
+    POST /v1/assistant/chat           questions answered from the library
 
 *Usage:*
 >>> app = create_app()                      # uvicorn main:app
@@ -27,9 +30,14 @@ from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 
+import agent
+from agent.agent import Assistant
+from agent.config import load_config
+from agent.rag import Library
 from api import errors
 from api.deps import MB, BodyLimit, JobGate, RateWindows
-from api.routes import documents, keys, system
+from api.routes import assistant as assistant_routes
+from api.routes import documents, keys, library as library_routes, system
 from core.config import Settings, get_settings
 from core.db import db, init_db
 from core.pipeline import TaxDocumentPipeline
@@ -46,11 +54,14 @@ DISCLAIMER = (
 def create_app(
     settings: Settings | None = None,
     pipeline: TaxDocumentPipeline | None = None,
-    load_models: bool = True, 
-    dispose_db_on_shutdown: bool = True
+    load_models: bool = True,
+    dispose_db_on_shutdown: bool = True,
+    assistant: tuple[Library, Assistant] | None = None,
 ) -> FastAPI:
+    """`assistant`: (library, assistant) to use instead of building them from `settings.assistant_config`."""
     settings = settings or get_settings()
     pipeline = pipeline or TaxDocumentPipeline(settings)
+    library, assistant_ = assistant or agent.build(load_config(settings.assistant_config))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -74,6 +85,8 @@ def create_app(
     app.state.pipeline = pipeline
     app.state.rate_windows = RateWindows()
     app.state.jobs = JobGate(settings.max_concurrent_jobs, settings.max_queued_jobs)
+    app.state.library = library
+    app.state.assistant = assistant_
     app.add_middleware(BodyLimit, settings=settings)
 
     @app.middleware("http")
@@ -102,6 +115,8 @@ def create_app(
     app.include_router(system.router)
     app.include_router(keys.router)
     app.include_router(documents.router)
+    app.include_router(library_routes.router)
+    app.include_router(assistant_routes.router)
 
     @app.get("/", include_in_schema=False)
     async def root() -> RedirectResponse:

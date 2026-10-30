@@ -18,6 +18,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from agent.agent import ChatUnavailable
+from agent.rag import EmbeddingsUnavailable, IndexMismatch
 from core.extractor import ExtractorUnavailable
 from core.forms import FORMS
 from core.parser import SUPPORTED_MEDIA_TYPES, ConversionFailed, DocumentTooLarge, UnsupportedDocument
@@ -45,11 +47,16 @@ DOMAIN_ERRORS: dict[type[Exception], tuple[int, str, Callable[[Any], dict | None
     MultipleForms: (422, "multiple_forms", lambda e: {"forms": e.forms}),
     ClassifierUnavailable: (503, "model_unavailable", lambda e: None),
     ExtractorUnavailable: (503, "model_unavailable", lambda e: None),
+    EmbeddingsUnavailable: (503, "model_unavailable", lambda e: None),
+    ChatUnavailable: (503, "model_unavailable", lambda e: None),
+    IndexMismatch: (409, "index_mismatch", lambda e: None),
 }
 
 DESCRIPTIONS = {
     400: "Empty or malformed request",
     401: "Missing or invalid API key",
+    404: "Not found",
+    409: "The library was built with another embedding model",
     403: "Admin key required",
     413: "File, file count or page count over the limit",
     415: "Not a PDF or supported image",
