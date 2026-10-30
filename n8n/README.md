@@ -179,6 +179,7 @@ The assistant can add flags but can't remove the automatic ones.
 | `failed` row: *"could not log in"* | Wrong API key | Re-enter the key in the **Tax Document API key** credential |
 | `failed` row: *"AI models … are not running"* | Ollama is stopped on the API server | Start Ollama, then re-send the file |
 | `needs_review` row: *"Page 3 of this file is not one of the supported tax forms"* | e.g. a Form 1040, an invoice, an instructions page | Handle that page by hand. The supported forms are listed under [What it does](#what-it-does) |
+| `needs_review` row: *"No text could be read from page(s) 2 of this file"* | A blank page (e.g. the back of a scanned sheet), or a page the reader failed on. *"only partly converted"* means the reader reported an error | Look at those pages in the original file. If one holds a form, re-send it as a clearer scan |
 | `failed` row: *"file type cannot be read"* | Word, Excel, ZIP, HEIC… | Ask for a PDF or a photo (JPG/PNG) |
 | `failed` row: *"too large"* / *"too many pages"* | Over 20 MB, or over 100 pages | Ask for the file in smaller parts |
 | No team alerts | Credential, channel or template | Open the alert node → **Execute step** to see the error. Slack: invite the bot to the channel. Telegram: the bot must be in the group. WhatsApp: the template must be approved. Crash alerts also need Step 5 |
@@ -213,5 +214,6 @@ You can also connect a cloud AI model instead (OpenAI, Anthropic, …) by replac
 * **Timeouts:** the API call allows 5 minutes per file. Files from one submission are processed one after another. A very long brokerage statement may need a longer timeout in **Run Document Pipeline**.
 * **Rate limits:** the bulk route defaults to 10 calls per minute per key. Large email backlogs may hit `429` and log `failed` rows with a "re-send in a minute" reason.
 * **Alerts:** **Write Team Alert** formats one message three ways (Slack mrkdwn, Telegram HTML, one-line WhatsApp template text) for `failed` records and for the **Pipeline Crashed** error trigger; `needs_review` rows only email the reviewer.
+* **Unread pages:** when the API lists `missing_pages` for a file, **Split Forms** adds one `needs_review` item for them (document id `<id>-unread`).
 * **Long 1099-B statements:** the assistant gets the first 10 sales plus totals per Form 8949 box; the log keeps every sale.
 * **Testing changes to the Code nodes:** `node n8n/tests/code-nodes.test.mjs n8n/tax-document-intake.workflow.json n8n/tests/api-fixtures.json` runs every Code node against recorded API responses: splitting forms, TIN masking, review flags, failure messages, alerts, email escaping, and the IRS code reference. Re-export the workflow from n8n and re-run it after editing.
