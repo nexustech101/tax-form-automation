@@ -21,9 +21,9 @@ The document workflow and the process-wide model services.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
-from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -84,7 +84,9 @@ def _classification(c: Classification) -> ClassificationResult:
 
 def _document_info(doc: ParsedDocument) -> DocumentInfo:
     return DocumentInfo(filename=doc.filename, media_type=doc.media_type, sha256=doc.sha256,
-                        pages=doc.pages, text_layer=doc.text_layer)
+                        pages=doc.pages, text_layer=doc.text_layer,
+                        conversion="partial" if doc.conversion_errors else "complete",
+                        conversion_errors=doc.conversion_errors, missing_pages=doc.missing_pages)
 
 
 def count_fields(obj: Any) -> tuple[int, int]:
@@ -103,11 +105,28 @@ def count_fields(obj: Any) -> tuple[int, int]:
     return found, total
 
 
-def identity(fields: TaxForm) -> tuple:
-    """TINs and top-level amounts: equal for two copies of the same form."""
-    tins = sorted(v.tin for v in fields.__dict__.values() if isinstance(v, BaseModel) and getattr(v, "tin", None))
-    amounts = tuple(sorted((k, v) for k, v in fields.__dict__.items() if isinstance(v, Decimal)))
-    return type(fields).FORM_ID, tuple(tins), amounts
+def identity(fields: TaxForm) -> str | None:
+    """
+    What two copies of one form share: every extracted value (tax year, parties,
+    account number, amounts, table rows). Any difference means a different form.
+    A form with no TIN and no amount has nothing to tell it apart, so it never
+    counts as a copy (returns None).
+    """
+    dump = fields.model_dump(mode="json")
+    if not _distinguishing(dump):
+        return None
+    return json.dumps([type(fields).FORM_ID, dump], sort_keys=True)
+
+
+def _distinguishing(value: Any, key: str = "") -> bool:
+    """True when the dump holds a TIN or an amount (any number other than the tax year)."""
+    if isinstance(value, dict):
+        return any(_distinguishing(v, k) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_distinguishing(v, key) for v in value)
+    if key in ("tin", "ssn") or key.endswith("_ssn"):
+        return bool(value)
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and key != "tax_year"
 
 
 class TaxDocumentPipeline:
@@ -191,11 +210,12 @@ class TaxDocumentPipeline:
 
     # --- extraction -----------------------------------------------------------------
 
-    async def _extract_form(self, form: type[TaxForm], segment: Segment, doc: ParsedDocument):
-        extraction = await self.extractor.extract(form, segment.all_blocks, segment.text, doc.page_image)
+    async def _extract_form(self, form: type[TaxForm], segment: Segment, doc: ParsedDocument, notes: list[str]):
+        extraction = await self.extractor.extract(form, segment.all_blocks, doc.page_image)
+        warnings = notes + doc.gaps_in(segment.pages) + extraction.warnings
         found, total = count_fields(extraction.fields)
-        report = ValidationReport(valid=not extraction.warnings, warnings=extraction.warnings,
-                                  fields_found=found, fields_total=total)
+        report = ValidationReport(valid=not warnings, warnings=warnings, fields_found=found, fields_total=total,
+                                  sources=extraction.sources)
         return extraction, report
 
     async def extract(
@@ -218,8 +238,7 @@ class TaxDocumentPipeline:
                 raise UnclassifiableDocument(c)
             form = FORMS[c.document_type]
 
-        extraction, report = await self._extract_form(form, segment, doc)
-        report.warnings[:0] = notes
+        extraction, report = await self._extract_form(form, segment, doc, notes)
         log.info("document processed", extra={"ctx": {
             "request_id": request_id, "document_type": form.FORM_ID, "pages": doc.pages,
             "text_layer": doc.text_layer, "fields_found": report.fields_found, "warnings": len(report.warnings),
@@ -247,7 +266,7 @@ class TaxDocumentPipeline:
             return FileResult(filename=filename, status="failed", error=ErrorBody(code=code, message=str(exc)))
 
         forms: list[FormResult] = []
-        seen: dict[tuple, int] = {}
+        seen: dict[str, int] = {}
         for index, segment in enumerate(split(doc)):
             started = time.perf_counter()
             c, notes = await self._classify_segment(segment)
@@ -258,11 +277,11 @@ class TaxDocumentPipeline:
                                         timings_ms={"classify": c.elapsed_ms}, **common))
                 continue
             form = FORMS[c.document_type]
-            extraction, report = await self._extract_form(form, segment, doc)
-            report.warnings[:0] = notes
+            extraction, report = await self._extract_form(form, segment, doc, notes)
             key = identity(extraction.fields)
-            duplicate_of = seen.get(key)
-            seen.setdefault(key, index)
+            duplicate_of = seen.get(key) if key else None
+            if key:
+                seen.setdefault(key, index)
             forms.append(FormResult(
                 status="duplicate" if duplicate_of is not None else "ok",
                 document_type=form.FORM_ID, form_name=form.TITLE, fields=extraction.fields, validation=report,

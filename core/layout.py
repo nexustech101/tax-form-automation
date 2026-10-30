@@ -169,6 +169,7 @@ class LabelMatcher:
     def __init__(self, labels: Iterable[str]):
         cleaned = {_strip_box_prefix(label) for label in labels} | set(GENERIC_LABELS)
         self.labels = sorted((label for label in cleaned if len(label) >= 4), key=len, reverse=True)
+        self.short = {label for label in cleaned if 2 <= len(label) < 4}  # 'May': matched only as a whole block
 
     def continues(self, first: str, second: str) -> bool:
         """True when `second` is the wrapped next line of the label `first`."""
@@ -181,6 +182,8 @@ class LabelMatcher:
         if not norm or not re.search(r"[a-z]{3,}", norm):
             return False, None
         stripped = _strip_box_prefix(text)
+        if stripped in self.short:
+            return True, None
         for label in self.labels:
             if stripped == label or (len(label) >= 8 and label in norm):
                 return True, _trailing_value(text, label)

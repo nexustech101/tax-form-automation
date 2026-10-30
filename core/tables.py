@@ -62,6 +62,7 @@ class Column:
 @dataclass
 class Table:
     rows: list[dict[str, Any]] = field(default_factory=list)
+    lines: list[list[Block]] = field(default_factory=list)  # the printed line(s) of each row
     used: set[int] = field(default_factory=set)  # id() of every block consumed (header, rows, sections)
 
 
@@ -190,6 +191,7 @@ def read_table(blocks: list[Block], model: type[BaseModel]) -> Table:
                 header, last_row_line = None, None
                 continue
             table.rows.append({**context, **cells})
+            table.lines.append(list(line))
             table.used |= {id(b) for b in line}
             last_row_line = line
         elif (lead and last_row_line and set(cells) == {lead} and line[0].page == last_row_line[0].page
@@ -197,6 +199,7 @@ def read_table(blocks: list[Block], model: type[BaseModel]) -> Table:
               and line[-1].right <= header[1].left + TOLERANCE):  # wrapped text stays inside its column
             row = table.rows[-1]
             row[lead] = f"{row.get(lead) or ''} {cells[lead]}".strip()
+            table.lines[-1] += line
             table.used |= {id(b) for b in line}
             last_row_line = line
         else:

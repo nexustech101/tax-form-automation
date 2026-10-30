@@ -91,11 +91,27 @@ class ParsedDocument:
     page_heights: dict[int, float]  # page_no -> height in block units (width is 1000)
     parse_ms: int
     source: bytes = field(default=b"", repr=False)  # the bytes Docling converted
+    conversion_errors: list[str] = field(default_factory=list)  # Docling reported a partial conversion
+    missing_pages: list[int] = field(default_factory=list)  # pages no text was read from
     _images: dict[int, np.ndarray] = field(default_factory=dict, repr=False)
 
     @property
     def text(self) -> str:
         return "\n".join(b.text for b in self.blocks)
+
+    def gaps_in(self, pages: list[int]) -> list[str]:
+        """
+        Warnings for a form on `pages`: the file was only partly converted, or a
+        page inside the form's page range produced no text.
+        """
+        out = []
+        if self.conversion_errors:
+            out.append(f"the file was only partly converted ({'; '.join(self.conversion_errors)[:300]}); "
+                       "values may be missing")
+        holes = [p for p in self.missing_pages if pages and min(pages) < p < max(pages)]
+        if holes:
+            out.append(f"no text could be read from page(s) {', '.join(map(str, holes))} inside this form")
+        return out
 
     def page_image(self, page_no: int) -> np.ndarray | None:
         """
@@ -239,16 +255,22 @@ class DoclingParser:
             data = _normalise_image(data)
         safe_name = _safe_filename(filename, media_type)
         result = self._convert(data, safe_name, fmt, pages)
+        blocks = blocks_from_conversion(result)
+        if not blocks:
+            raise ConversionFailed("No text could be read from the document: it may be blank or unreadable.")
+        read = {b.page for b in blocks}
         return ParsedDocument(
             filename=filename,
             media_type=media_type,
             sha256=hashlib.sha256(data).hexdigest(),
-            pages=len(result.pages) or pages,
+            pages=pages,  # from the file itself: pages Docling skipped still count
             text_layer=text_layer,
-            blocks=blocks_from_conversion(result),
+            blocks=blocks,
             page_heights=page_heights(result),
             parse_ms=int((time.perf_counter() - started) * 1000),
             source=data,
+            conversion_errors=[e.error_message for e in result.errors] if result.status is ConversionStatus.PARTIAL_SUCCESS else [],
+            missing_pages=[p for p in range(1, pages + 1) if p not in read],
         )
 
     async def parse(self, data: bytes, filename: str, max_pages: int | None = None) -> ParsedDocument:

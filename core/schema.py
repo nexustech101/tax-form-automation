@@ -83,6 +83,11 @@ class DocumentInfo(BaseModel):
     sha256: str
     pages: int
     text_layer: bool = Field(description="False when the document was OCR'd (scan or photo).")
+    conversion: Literal["complete", "partial"] = Field(
+        default="complete", description="partial: the parser reported errors; see conversion_errors.")
+    conversion_errors: list[str] = Field(default_factory=list)
+    missing_pages: list[int] = Field(
+        default_factory=list, description="Pages no text was read from: failed, blank or unreadable.")
 
 
 class ClassificationResult(BaseModel):
@@ -100,11 +105,22 @@ class ClassifyResponse(BaseModel):
     timings_ms: dict[str, int]
 
 
+class ValueSource(BaseModel):
+    """Where a value was read: the printed label it sits under, and its position."""
+
+    label: Optional[str] = Field(description="Printed label the value sits under; null for unlabeled text.")
+    page: int
+    box: tuple[float, float, float, float] = Field(
+        description="left, top, right, bottom; page width is 1000 units, origin top-left.")
+
+
 class ValidationReport(BaseModel):
-    valid: bool = Field(description="True when no field was dropped and no consistency check failed.")
+    valid: bool = Field(description="True when nothing was dropped, flagged or inconsistent.")
     warnings: list[str]
     fields_found: int
     fields_total: int
+    sources: dict[str, ValueSource] = Field(
+        default_factory=dict, description="Field path -> where each amount, TIN and table row was read.")
 
 
 class ExtractResponse(BaseModel):

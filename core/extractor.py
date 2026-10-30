@@ -9,15 +9,17 @@ Flow:
 2. `core.layout` pairs each printed label with the value(s) in its box.
 3. A local LLM (Ollama, JSON-schema constrained output) maps those pairs onto
    the form's schema. Leaves are loosely typed (string/number/null, boolean
-   for checkboxes); exact typing is left to step 5. Evidence longer than the
-   model's budget is sent page by page and the answers merged.
+   for checkboxes); exact typing is left to step 5. Evidence is packed into
+   chunks whose estimated size, with the prompt and the answer, fits the
+   model's context; the answers are merged.
 4. Checkboxes are read from the page image (`core.checkboxes`) and override
    the model's reading wherever the box was found.
 5. Values are parsed deterministically (`core.utils`) and validated against
    the form model. A value that cannot be parsed is dropped with a warning
    instead of failing the whole document.
-6. Grounding: amounts and TINs whose digits do not appear in the document
-   text are treated as hallucinations and removed (`strict_grounding`).
+6. Verification (`core.grounding`): every amount and TIN must be printed in
+   the box of its own label; values that are not printed, or that sit under
+   another label (swapped), are removed. Each kept value records its source.
 7. Form-specific consistency checks add warnings (e.g. W-2 box 4 ~ 6.2% of
    box 3).
 """
@@ -26,11 +28,9 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 import typing
 from dataclasses import dataclass, field
-from decimal import Decimal
 from typing import Any, Callable
 
 import httpx
@@ -40,9 +40,9 @@ from pydantic import BaseModel, ValidationError
 from core.checkboxes import checkbox_states
 from core.config import Settings
 from core.forms import Address, Party, TaxForm, _submodel, form_labels
+from core.grounding import verify
 from core.layout import Block, pair_blocks, render_evidence
 from core.tables import read_table
-from core.utils import digits_only, parse_money
 
 log = logging.getLogger(__name__)
 
@@ -66,9 +66,21 @@ class Extraction:
     fields: TaxForm
     warnings: list[str] = field(default_factory=list)
     dropped: list[str] = field(default_factory=list)
+    sources: dict[str, Any] = field(default_factory=dict)  # path -> core.schema.ValueSource
     model: str = ""
     elapsed_ms: int = 0
     evidence_chars: int = 0
+    llm_calls: int = 0
+
+
+def estimate_tokens(text: str) -> int:
+    """
+    Upper estimate of a text's token count. Qwen-style tokenizers give every
+    digit its own token, and form evidence is mostly numbers, so digits count
+    one each and other characters one per three.
+    """
+    digits = sum(c.isdigit() for c in text)
+    return digits + (len(text) - digits + 2) // 3
 
 
 # --- Schema for the LLM ------------------------------------------------------------
@@ -213,55 +225,6 @@ def validate_leniently(model: type[TaxForm], data: dict[str, Any]) -> tuple[TaxF
     return model.model_validate({}), warnings + ["validation gave up; returning empty form"]
 
 
-# --- Grounding --------------------------------------------------------------------
-
-_NUMBER = re.compile(r"\$?\d(?:[\d,.]*\d)?")
-
-
-def _document_numbers(text: str) -> tuple[set[Decimal], set[str]]:
-    """Every amount printed in the text (read with the same parser as the fields) and every TIN-like token."""
-    amounts: set[Decimal] = set()
-    for token in _NUMBER.findall(text):
-        try:
-            amount = parse_money(token)
-        except ValueError:
-            continue
-        if amount is not None:
-            amounts.add(abs(amount))
-    tins = {digits_only(t) for t in re.findall(r"[\dX*]{2,3}[- ]?[\dX*]{2,7}[- ]?[\dX*]{0,4}", text.upper())}
-    return amounts, tins
-
-
-def ground(form: TaxForm, text: str) -> list[str]:
-    """Null out amounts/TINs that never appear in the source. Returns dropped paths."""
-    amounts, tins = _document_numbers(text)
-    text_digits = digits_only(text)
-    dropped: list[str] = []
-
-    def walk(obj: BaseModel, path: str) -> None:
-        for name, info in type(obj).model_fields.items():
-            value = getattr(obj, name)
-            here = f"{path}{name}"
-            if isinstance(value, BaseModel):
-                walk(value, here + ".")
-            elif isinstance(value, list):
-                for i, row in enumerate(value):
-                    if isinstance(row, BaseModel):
-                        walk(row, f"{here}[{i}].")
-            elif isinstance(value, Decimal):
-                if abs(value) not in amounts and value != 0:
-                    setattr(obj, name, None)
-                    dropped.append(here)
-            elif (name in ("tin", "ssn") or name.endswith("_ssn")) and isinstance(value, str):
-                digits = digits_only(value)
-                if digits and digits not in text_digits and digits not in tins:
-                    setattr(obj, name, None)
-                    dropped.append(here)
-
-    walk(form, "")
-    return dropped
-
-
 # --- Extractor ---------------------------------------------------------------------
 
 
@@ -287,38 +250,35 @@ class LLMExtractor:
         self.settings = settings
         self.model = settings.extractor_model
         self.client = client or ollama.AsyncClient(host=settings.ollama_url, timeout=settings.ollama_timeout_s)
-        # Characters of evidence per request: ~3 chars/token, leaving room for the field guide and the answer.
-        self.evidence_budget = int(settings.extractor_num_ctx * 1.5)
 
     async def warmup(self) -> None:
         await self._chat([{"role": "user", "content": "Reply with {}"}], {"type": "object"})
 
     async def _chat(self, messages: list[dict], schema: dict) -> str:
+        options = {"temperature": 0, "num_ctx": self.settings.extractor_num_ctx,
+                   "num_predict": self.settings.extractor_output_tokens, "seed": 7}
         try:
-            response = await self.client.chat(
-                model=self.model,
-                messages=messages,
-                format=schema,
-                think=False,
-                options={"temperature": 0, "num_ctx": self.settings.extractor_num_ctx, "seed": 7},
-                keep_alive=self.settings.ollama_keep_alive,
-            )
+            response = await self.client.chat(model=self.model, messages=messages, format=schema, think=False,
+                                              options=options, keep_alive=self.settings.ollama_keep_alive)
         except (httpx.HTTPError, ConnectionError) as exc:
             raise ExtractorUnavailable(f"Ollama is unreachable at {self.settings.ollama_url}: {exc}") from exc
         except ollama.ResponseError as exc:
             raise ExtractorUnavailable(f"extraction model error ({self.model}): {exc.error}") from exc
         return response.message.content or "{}"
 
-    async def _ask(self, form: type[TaxForm], evidence: str, skip: frozenset[str]) -> dict[str, Any]:
-        prompt = (
+    @staticmethod
+    def _prompt(form: type[TaxForm], evidence: str, skip: frozenset[str]) -> str:
+        return (
             f"Document type: {form.TITLE}\n\n"
             "Field guide (JSON key: where it is printed):\n" + "\n".join(field_guide(form, skip=skip)) + "\n\n"
             "Document, one printed label per line as `label => value(s)`; "
             "values in the same box are separated by ' | '; unlabeled text is on its own line:\n"
             "<document>\n" + evidence + "\n</document>"
         )
+
+    async def _ask(self, form: type[TaxForm], evidence: str, skip: frozenset[str]) -> dict[str, Any]:
         raw = await self._chat(
-            [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
+            [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": self._prompt(form, evidence, skip)}],
             llm_schema(form, skip),
         )
         try:
@@ -327,36 +287,58 @@ class LLMExtractor:
             return {}
         return data if isinstance(data, dict) else {}
 
-    def _chunks(self, blocks: list[Block], labels: list[str]) -> list[str]:
-        """Evidence in pieces that fit the budget, split on page boundaries (context blocks lead each piece)."""
-        evidence = render_evidence(pair_blocks(blocks, labels))
-        if len(evidence) <= self.evidence_budget:
-            return [evidence]
-        pages = sorted({b.page for b in blocks})
-        return [render_evidence(pair_blocks([b for b in blocks if b.page == p], labels)) for p in pages]
+    def evidence_budget(self, form: type[TaxForm], skip: frozenset[str]) -> int:
+        """Estimated tokens of evidence one request can carry: context minus answer, prompt and a 10% margin."""
+        s = self.settings
+        overhead = estimate_tokens(SYSTEM_PROMPT + self._prompt(form, "", skip)) + 32  # chat template
+        budget = int((s.extractor_num_ctx - s.extractor_output_tokens) * 0.9) - overhead
+        if budget < 256:
+            raise ExtractorUnavailable(
+                f"EXTRACTOR_NUM_CTX={s.extractor_num_ctx} leaves no room for {form.FORM_ID} evidence "
+                f"(prompt ~{overhead} tokens, answer {s.extractor_output_tokens}).")
+        return budget
 
-    async def extract(
-        self,
-        form: type[TaxForm],
-        blocks: list[Block],
-        text: str,
-        page_image: PageImage,
-    ) -> Extraction:
-        """`blocks`: the form's blocks (shared context first); `text`: its full text, for grounding."""
+    @staticmethod
+    def chunks(paired: list[Block], budget: int) -> list[str]:
+        """
+        Evidence lines packed into chunks of at most `budget` estimated tokens.
+        Lines are never split across chunks; a chunk that starts mid-page repeats
+        the page marker. A single line over budget (never seen on a form) is cut.
+        """
+        out: list[str] = []
+        current: list[str] = []
+        size, marker = 0, ""
+        for line in render_evidence(paired).splitlines():
+            if line.startswith("--- page "):
+                marker = line
+            line = line[: budget - 16]  # worst case is all digits: one token per character
+            cost = estimate_tokens(line) + 1
+            if current and size + cost > budget:
+                out.append("\n".join(current))
+                current, size = ([marker], estimate_tokens(marker) + 1) if marker != line else ([], 0)
+            current.append(line)
+            size += cost
+        if current:
+            out.append("\n".join(current))
+        return out
+
+    async def extract(self, form: type[TaxForm], blocks: list[Block], page_image: PageImage) -> Extraction:
+        """`blocks`: the form's blocks, shared statement context first."""
         started = time.perf_counter()
         warnings: list[str] = []
 
         tables: dict[str, list[dict]] = {}
+        table_lines: dict[str, list[list[Block]]] = {}
         used: set[int] = set()
         for name, row_model in table_fields(form).items():
             table = read_table(blocks, row_model)
             if table.rows:
-                tables[name] = table.rows
+                tables[name], table_lines[name] = table.rows, table.lines
                 used |= table.used
-        evidence_blocks = [b for b in blocks if id(b) not in used]
+        paired = pair_blocks([b for b in blocks if id(b) not in used], form_labels(form))
 
         skip = frozenset(tables)
-        chunks = self._chunks(evidence_blocks, form_labels(form))
+        chunks = self.chunks(paired, self.evidence_budget(form, skip))
         answers = [await self._ask(form, chunk, skip) for chunk in chunks]
         data = merge_answers(answers)
         if not data:
@@ -370,9 +352,11 @@ class LLMExtractor:
             setattr(fields, name, checked)
         warnings += validation_warnings
         dropped: list[str] = []
+        sources: dict[str, Any] = {}
         if self.settings.strict_grounding:
-            dropped = ground(fields, text)
-            warnings += [f"{path}: removed, value not found in document text" for path in dropped]
+            checked = verify(fields, paired, table_lines)
+            dropped, sources = checked.dropped, checked.sources
+            warnings += checked.warnings
         warnings += fields.consistency_checks()
 
         evidence_chars = sum(len(c) for c in chunks)
@@ -382,4 +366,4 @@ class LLMExtractor:
             "table_rows": sum(len(r) for r in tables.values()), "warnings": len(warnings),
             "dropped": len(dropped), "elapsed_ms": elapsed_ms,
         }})
-        return Extraction(fields, warnings, dropped, self.model, elapsed_ms, evidence_chars)
+        return Extraction(fields, warnings, dropped, sources, self.model, elapsed_ms, evidence_chars, len(chunks))

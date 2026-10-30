@@ -43,7 +43,11 @@ class Settings(BaseSettings):
     max_pages: int = 10  # single-form routes
     bulk_max_files: int = 20
     bulk_max_pages: int = 100  # per file: consolidated brokerage statements run long
-    bulk_max_total_mb: int = 100
+    bulk_max_total_mb: int = 100  # request body, counted as it arrives
+
+    # --- Extraction jobs (one job = one extract or bulk request) ---------------
+    max_concurrent_jobs: int = 2  # running at once; each holds its files in memory
+    max_queued_jobs: int = 8  # waiting beyond this get 503 busy
 
     # --- Docling ---------------------------------------------------------------
     docling_device: str = "auto"  # auto | cpu | cuda | mps
@@ -62,7 +66,8 @@ class Settings(BaseSettings):
     tev_max_state_chars: int = 3000  # tev1 works best under ~1.5k tokens of state
     tev_min_confidence: float = 0.5
     extractor_model: str = "qwen3.5:4b"
-    extractor_num_ctx: int = 8192  # prompt ~1.5-3k tokens + JSON output
+    extractor_num_ctx: int = 8192  # tokens: prompt + evidence + answer must fit
+    extractor_output_tokens: int = 2048  # answer budget (num_predict); evidence gets the rest
     # Drop extracted numbers / TINs whose digits never appear in the document text.
     strict_grounding: bool = True
 

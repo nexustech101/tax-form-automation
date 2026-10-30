@@ -8,7 +8,7 @@ label as metadata (see `box`). That one definition drives:
 * the JSON schema of the API response,
 * the field guide handed to the extraction LLM (`core.extractor`),
 * the tev1 classification criteria (`TITLE` / `HINT`),
-* the synthetic test documents (`scripts/generate_samples.py`).
+* the synthetic test documents in `tests/samples/`.
 
 Adding a form = adding one class here and registering it in `FORMS`.
 """
@@ -106,21 +106,21 @@ class Party(_Model):
 
 class CodedAmount(_Model):
     code: Text = Field(default=None, description="Letter code printed next to the amount")
-    amount: Money = None
+    amount: Money = Field(default=None, description="Amount")
 
 
 class DescribedAmount(_Model):
-    description: Text = None
-    amount: Money = None
+    description: Text = Field(default=None, description="Description")
+    amount: Money = Field(default=None, description="Amount")
 
 
 class StateTaxRow(_Model):
     """State/local information block common to 1099-series forms."""
 
-    state: State = None
+    state: State = Field(default=None, description="State")
     payer_state_id: Text = Field(default=None, description="Payer's state identification number")
-    state_income: Money = None
-    state_tax_withheld: Money = None
+    state_income: Money = Field(default=None, description="State income")
+    state_tax_withheld: Money = Field(default=None, description="State tax withheld")
 
 
 class TaxForm(_Model):
