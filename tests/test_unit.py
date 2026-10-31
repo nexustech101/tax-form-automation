@@ -67,7 +67,7 @@ def test_every_form_has_metadata_and_schema():
     assert len(FORMS) == 15
     for form_id, form in FORMS.items():
         assert form.FORM_ID == form_id
-        assert form.TITLE and form.HINT
+        assert form.TITLE and form.HINT and form.NAME in form.TITLE.replace("Schedule ", "").replace("(Form ", "(")
         schema = form.model_json_schema(mode="serialization")
         assert schema["type"] == "object"
         assert form_labels(form), form_id
@@ -84,7 +84,7 @@ def test_money_serialises_as_number():
 
 
 def test_validate_leniently_drops_only_bad_values():
-    form, warnings = validate_leniently(W2, {
+    form, flags = validate_leniently(W2, {
         "wages_tips_other_comp": "68,412.55",
         "federal_income_tax_withheld": "see attached",
         "employee": {"name": "Maria", "tin": "12"},
@@ -94,7 +94,8 @@ def test_validate_leniently_drops_only_bad_values():
     assert form.federal_income_tax_withheld is None
     assert form.employee.name == "Maria" and form.employee.tin is None
     assert form.box12[0].amount == Decimal("1000.00")
-    assert len(warnings) == 2
+    assert sorted((f.field, f.code) for f in flags) == [("employee.tin", "unparseable"),
+                                                        ("federal_income_tax_withheld", "unparseable")]
 
 
 def _nec_page(fed_tax="0.00"):
@@ -121,7 +122,7 @@ def test_verify_keeps_values_under_their_own_label_and_records_where():
 
     form = _nec()
     result = verify(form, _nec_page())
-    assert result.dropped == [] and result.warnings == []
+    assert result.dropped == [] and result.flags == []
     assert form.federal_income_tax_withheld == Decimal("0.00")  # a printed zero is a value
     src = result.sources["nonemployee_compensation"]
     assert (src.label, src.page, src.box) == ("1 Nonemployee compensation", 1, (600.0, 115.0, 690.0, 125.0))
@@ -135,7 +136,8 @@ def test_verify_removes_values_not_printed_including_zero():
     result = verify(form, _nec_page(fed_tax=None))  # box 4 is blank: the model's 0.00 is invented
     assert result.dropped == ["federal_income_tax_withheld"]
     assert form.federal_income_tax_withheld is None
-    assert "not printed" in result.warnings[0]
+    assert (result.flags[0].field, result.flags[0].code) == ("federal_income_tax_withheld", "not_printed")
+    assert "not printed" in result.flags[0].message
 
 
 def test_verify_removes_swapped_values():
@@ -144,7 +146,8 @@ def test_verify_removes_swapped_values():
     form = _nec(nonemployee_compensation="0.00", federal_income_tax_withheld="24,750.00")  # boxes 1 and 4 swapped
     result = verify(form, _nec_page())
     assert set(result.dropped) == {"nonemployee_compensation", "federal_income_tax_withheld"}
-    assert any("printed under '1 Nonemployee compensation', not under its own label" in w for w in result.warnings)
+    assert any(f.code == "wrong_label" and f.field == "federal_income_tax_withheld"
+               and "printed under '1 Nonemployee compensation', not under its own label" in f.message for f in result.flags)
 
 
 def test_verify_keeps_but_flags_a_value_whose_label_is_not_on_the_page():
@@ -155,16 +158,19 @@ def test_verify_keeps_but_flags_a_value_whose_label_is_not_on_the_page():
     form = _nec()
     result = verify(form, page)
     assert form.federal_income_tax_withheld == Decimal("0.00")
-    assert result.warnings == ["federal_income_tax_withheld: 0.00 is printed in the document, but not in its labeled box; check it"]
+    assert [f.model_dump() for f in result.flags] == [{
+        "field": "federal_income_tax_withheld", "code": "unlabeled",
+        "message": "0.00 is printed in the document, but not in its labeled box; check it"}]
 
 
-def test_verify_warnings_never_show_a_full_tin():
+def test_verify_flags_never_show_a_full_tin():
     from core.grounding import verify
 
     form = _nec(recipient={"name": "Dev", "tin": "412-56-7890"})  # not the TIN printed on the page
     result = verify(form, _nec_page())
     assert result.dropped == ["recipient.tin"]
-    assert result.warnings == ["recipient.tin: removed, TIN ending 7890 is not printed in the document"]
+    assert [f.model_dump() for f in result.flags] == [{
+        "field": "recipient.tin", "code": "not_printed", "message": "removed, TIN ending 7890 is not printed in the document"}]
 
 
 def test_verify_checks_list_rows_under_their_column_labels():
@@ -189,12 +195,44 @@ def test_verify_takes_table_rows_from_their_printed_lines():
     assert result.sources["transactions[0]"].box == (40.0, 120.0, 590.0, 130.0)
 
 
+def test_verify_locates_text_values_without_removing_or_flagging_them():
+    from core.forms import Form1095A
+    from core.grounding import verify
+
+    blocks = [Block(1, 10, 20, 400, 30, "Form W-2 Wage and Tax Statement 2025"),
+              Block(1, 10, 100, 300, 110, "c Employer's name, address, and ZIP code"),
+              Block(1, 20, 115, 200, 125, "Acme Industries LLC"), Block(1, 20, 130, 260, 140, "Harrisburg, PA 17101"),
+              Block(1, 500, 100, 700, 110, "d Control number"), Block(1, 520, 115, 600, 125, "A-77"),
+              Block(1, 10, 200, 200, 210, "Letter code printed next to the amount"), Block(1, 30, 215, 50, 225, "D"),
+              Block(1, 600, 300, 800, 310, "Retirement plan"), Block(1, 600, 400, 700, 410, "PA")]
+    form = W2.model_validate({"tax_year": 2025, "control_number": "A-77", "retirement_plan": True,
+                              "employer": {"name": "Acme Industries LLC", "address": {"city": "Harrisburg", "state": "PA"}},
+                              "employee": {"name": "Not On The Page"}, "box12": [{"code": "D"}]})
+    result = verify(form, pair_blocks(blocks, form_labels(W2)))
+    assert result.flags == [] and result.dropped == [] and form.employee.name == "Not On The Page"
+    where = {path: (s.label, s.box[:2]) for path, s in result.sources.items()}
+    assert where["employer.name"] == ("c Employer's name, address, and ZIP code", (20.0, 115.0))
+    assert where["employer.address.city"][1] == (20.0, 130.0)
+    assert where["employer.address.state"][1] == (20.0, 130.0)  # 2 letters: found under the party's own label
+    assert where["control_number"] == ("d Control number", (520.0, 115.0))
+    assert where["box12[0].code"] == ("Letter code printed next to the amount", (30.0, 215.0))
+    assert where["retirement_plan"] == ("Retirement plan", (600.0, 300.0))  # a checkbox: its label
+    assert where["tax_year"][1] == (10.0, 20.0)
+    assert "employee.name" not in result.sources
+
+    page = [Block(1, 10, 100, 200, 110, "6 Recipient's date of birth"), Block(1, 20, 115, 120, 125, "03/05/1990")]
+    form = Form1095A.model_validate({"recipient_date_of_birth": "1990-03-05"})
+    result = verify(form, pair_blocks(page, form_labels(Form1095A)))
+    assert result.sources["recipient_date_of_birth"].box[:2] == (20.0, 115.0)  # printed as 03/05/1990
+
+
 def test_consistency_checks():
     ok = W2.model_validate({"social_security_wages": "1000", "social_security_tax_withheld": "62",
                             "medicare_wages_and_tips": "1000", "medicare_tax_withheld": "14.50"})
     assert ok.consistency_checks() == []
     bad = W2.model_validate({"social_security_wages": "1000", "social_security_tax_withheld": "10"})
-    assert "6.2%" in bad.consistency_checks()[0]
+    (flag,) = bad.consistency_checks()
+    assert (flag.field, flag.code) == ("social_security_tax_withheld", "inconsistent") and "6.2%" in flag.message
     assert SSA1099.model_validate({"benefits_paid": "100", "benefits_repaid": "0", "net_benefits": "90"}).consistency_checks()
     k1 = ScheduleK1_1065.model_validate({"capital_account": {
         "beginning_capital_account": "100", "capital_contributed": "10", "current_year_net_income": "5",
@@ -259,18 +297,18 @@ def test_clean_separators():
     from core.extractor import clean_separators
 
     data = {"account_number": "SL-6619024 | 2", "rows": [{"code": "A | B"}], "name": "Plain"}
-    warnings = clean_separators(data)
+    flags = clean_separators(data)
     assert data == {"account_number": "SL-6619024", "rows": [{"code": "A"}], "name": "Plain"}
-    assert len(warnings) == 2
+    assert [(f.field, f.code) for f in flags] == [("account_number", "multiple_values"), ("rows[0].code", "multiple_values")]
 
 
 def test_json_in_text_field_is_flattened():
     from core.extractor import clean_separators
 
     data = {"distribution_codes": '[{"code": "7", "amount": null}]', "note": "[draft] keep"}
-    warnings = clean_separators(data)
+    flags = clean_separators(data)
     assert data == {"distribution_codes": "7", "note": "[draft] keep"}
-    assert len(warnings) == 1
+    assert [(f.field, f.code) for f in flags] == [("distribution_codes", "text_as_json")]
 
 
 # --- checkboxes (page image) --------------------------------------------------------------
@@ -492,13 +530,15 @@ def test_merge_answers_first_value_wins_and_lists_concatenate():
 
 def test_new_form_consistency_checks():
     k = Form1099K.model_validate({"gross_amount": "300", "january": "100", "february": "100", "march": "50"})
-    assert "boxes 5a-5l" in k.consistency_checks()[0]
+    (flag,) = k.consistency_checks()
+    assert flag.field == "gross_amount" and "boxes 5a-5l" in flag.message
     a = Form1095A.model_validate({"monthly": [{"month": "Jan", "enrollment_premium": "450"},
                                               {"month": "Feb", "enrollment_premium": "450"}],
                                   "annual_enrollment_premiums": "900"})
     assert a.consistency_checks() == []
     b = Form1099B.model_validate({"transactions": [{"proceeds": "100", "cost_basis": "80", "gain_or_loss": "25"}]})
-    assert "gain or loss" in b.consistency_checks()[0]
+    (flag,) = b.consistency_checks()
+    assert flag.field == "transactions[0].gain_or_loss" and "gain or loss" in flag.message
 
 
 def test_broker_section_headings():
@@ -608,3 +648,10 @@ def test_score_forms_checks_status_and_missing_fields():
     assert a["identified"] and a["field_accuracy"] == 1.0
     assert not b["identified"] and b["field_accuracy"] == 0.0
 
+
+
+def test_flag_messages_never_carry_a_full_ssn():
+    from core.flags import Flag
+
+    flag = Flag(field="employee.tin", code="multiple_values", message="kept '412-56-7890', also saw 412 56 7891")
+    assert flag.message == "kept 'XXX-XX-7890', also saw XXX-XX-7891"

@@ -15,13 +15,16 @@ Flow:
 4. Checkboxes are read from the page image (`core.checkboxes`) and override
    the model's reading wherever the box was found.
 5. Values are parsed deterministically (`core.utils`) and validated against
-   the form model. A value that cannot be parsed is dropped with a warning
-   instead of failing the whole document.
+   the form model. A value that cannot be parsed is dropped with an
+   `unparseable` flag instead of failing the whole document.
 6. Verification (`core.grounding`): every amount and TIN must be printed in
    the box of its own label; values that are not printed, or that sit under
    another label (swapped), are removed. Each kept value records its source.
-7. Form-specific consistency checks add warnings (e.g. W-2 box 4 ~ 6.2% of
-   box 3).
+7. Form-specific consistency checks add `inconsistent` flags (e.g. W-2 box 4
+   ~ 6.2% of box 3).
+
+Everything worth a reviewer's attention is reported as a `core.flags.Flag`
+with the field path it concerns.
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ from pydantic import BaseModel, ValidationError
 
 from core.checkboxes import checkbox_states
 from core.config import Settings
+from core.flags import Flag, field_path
 from core.forms import Address, Party, TaxForm, _submodel, form_labels
 from core.grounding import verify
 from core.layout import Block, pair_blocks, render_evidence
@@ -64,7 +68,7 @@ class ExtractorUnavailable(RuntimeError):
 @dataclass
 class Extraction:
     fields: TaxForm
-    warnings: list[str] = field(default_factory=list)
+    flags: list[Flag] = field(default_factory=list)
     dropped: list[str] = field(default_factory=list)
     sources: dict[str, Any] = field(default_factory=dict)  # path -> core.schema.ValueSource
     model: str = ""
@@ -168,23 +172,25 @@ def _flatten_json_text(text: str) -> str | None:
     return ", ".join(parts)
 
 
-def clean_separators(data: Any, path: str = "") -> list[str]:
-    """Remove the evidence separator (' | ') if the model copied it into a value."""
-    warnings: list[str] = []
+def clean_separators(data: Any, path: tuple = ()) -> list[Flag]:
+    """Remove the evidence separator (' | ') if the model copied it into a value; flatten JSON in text fields."""
+    flags: list[Flag] = []
     items = data.items() if isinstance(data, dict) else enumerate(data) if isinstance(data, list) else []
     for key, value in list(items):
-        here = f"{path}.{key}" if path else str(key)
+        here = (*path, key)
         if isinstance(value, str) and value[:1] in "[{":
             flat = _flatten_json_text(value)
             if flat is not None:
                 data[key] = value = flat
-                warnings.append(f"{here}: model returned JSON for a text field; kept {flat!r}")
+                flags.append(Flag(field=field_path(here), code="text_as_json",
+                                  message=f"the model returned JSON for a text field; kept {flat!r}"))
         if isinstance(value, str) and " | " in value:
             data[key] = value.split(" | ")[0].strip()
-            warnings.append(f"{here}: several printed values in one box; kept {data[key]!r}")
+            flags.append(Flag(field=field_path(here), code="multiple_values",
+                              message=f"several printed values in one box; kept {data[key]!r}"))
         elif isinstance(value, (dict, list)):
-            warnings += clean_separators(value, here)
-    return warnings
+            flags += clean_separators(value, here)
+    return flags
 
 
 # --- Lenient validation ------------------------------------------------------------
@@ -203,12 +209,12 @@ def _pop_path(data: Any, loc: tuple) -> Any:
     return None
 
 
-def validate_leniently(model: type[TaxForm], data: dict[str, Any]) -> tuple[TaxForm, list[str]]:
-    """Validate, dropping (and reporting) only the values that fail."""
-    warnings: list[str] = []
+def validate_leniently(model: type[TaxForm], data: dict[str, Any]) -> tuple[TaxForm, list[Flag]]:
+    """Validate, dropping (and flagging) only the values that fail."""
+    flags: list[Flag] = []
     for _ in range(25):
         try:
-            return model.model_validate(data), warnings
+            return model.model_validate(data), flags
         except ValidationError as exc:
             for error in exc.errors():
                 loc = tuple(error["loc"])
@@ -216,13 +222,14 @@ def validate_leniently(model: type[TaxForm], data: dict[str, Any]) -> tuple[TaxF
                     bad = _pop_path(data, loc)
                 except (KeyError, IndexError, TypeError):
                     continue
-                path = ".".join(str(p) for p in loc)
-                warnings.append(f"{path}: dropped unparseable value {bad!r} ({error['msg']})")
+                flags.append(Flag(field=field_path(loc), code="unparseable",
+                                  message=f"dropped unparseable value {bad!r} ({error['msg']})"))
             data = {k: v for k, v in data.items()}
             for key, value in list(data.items()):
                 if isinstance(value, list):
                     data[key] = [row for row in value if row is not None]
-    return model.model_validate({}), warnings + ["validation gave up; returning empty form"]
+    return model.model_validate({}), flags + [Flag(field=None, code="unparseable",
+                                                   message="validation gave up; returning an empty form")]
 
 
 # --- Extractor ---------------------------------------------------------------------
@@ -325,7 +332,7 @@ class LLMExtractor:
     async def extract(self, form: type[TaxForm], blocks: list[Block], page_image: PageImage) -> Extraction:
         """`blocks`: the form's blocks, shared statement context first."""
         started = time.perf_counter()
-        warnings: list[str] = []
+        flags: list[Flag] = []
 
         tables: dict[str, list[dict]] = {}
         table_lines: dict[str, list[list[Block]]] = {}
@@ -342,28 +349,28 @@ class LLMExtractor:
         answers = [await self._ask(form, chunk, skip) for chunk in chunks]
         data = merge_answers(answers)
         if not data:
-            warnings.append("extraction model returned no usable JSON")
+            flags.append(Flag(field=None, code="no_output", message="the extraction model returned no usable JSON"))
         data.update(tables)
 
-        warnings += clean_separators(data)
-        fields, validation_warnings = validate_leniently(form, data)
+        flags += clean_separators(data)
+        fields, validation_flags = validate_leniently(form, data)
         # Checkboxes come from the page image (ink inside the box), not the model's reading.
         for name, checked in checkbox_states(blocks, checkbox_labels(form), page_image).items():
             setattr(fields, name, checked)
-        warnings += validation_warnings
+        flags += validation_flags
         dropped: list[str] = []
         sources: dict[str, Any] = {}
         if self.settings.strict_grounding:
             checked = verify(fields, paired, table_lines)
             dropped, sources = checked.dropped, checked.sources
-            warnings += checked.warnings
-        warnings += fields.consistency_checks()
+            flags += checked.flags
+        flags += fields.consistency_checks()
 
         evidence_chars = sum(len(c) for c in chunks)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         log.info("extracted", extra={"ctx": {
             "form": form.FORM_ID, "evidence_chars": evidence_chars, "llm_calls": len(chunks),
-            "table_rows": sum(len(r) for r in tables.values()), "warnings": len(warnings),
+            "table_rows": sum(len(r) for r in tables.values()), "flags": len(flags),
             "dropped": len(dropped), "elapsed_ms": elapsed_ms,
         }})
-        return Extraction(fields, warnings, dropped, sources, self.model, elapsed_ms, evidence_chars, len(chunks))
+        return Extraction(fields, flags, dropped, sources, self.model, elapsed_ms, evidence_chars, len(chunks))

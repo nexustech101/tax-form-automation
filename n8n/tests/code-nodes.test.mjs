@@ -130,16 +130,20 @@ await test('prepare review: TINs masked, form position flagged', async () => {
   assert.equal(p.pages, '1');
 });
 
-await test('prepare review: scan, low confidence, warnings, year mismatch all flagged', async () => {
+await test('prepare review: scan, low confidence, flags, year mismatch all flagged', async () => {
   const item = structuredClone(split[0]);
   item.json.form.classification.confidence = 0.62;
   item.json.form.text_layer = false;
-  item.json.form.validation.warnings = ['box 4 (10) is not 6.2% of box 3 (1000)'];
+  item.json.form.validation.flags = [
+    { field: 'social_security_tax_withheld', code: 'inconsistent', message: 'box 4 (10) is not 6.2% of box 3 (1000)' },
+    { field: null, code: 'missing_page', message: 'no text could be read from page(s) 2 inside this form' },
+  ];
   item.json.doc.tax_year = '2024';
   item.json.form_count = 1;
   const out = await run('Prepare Review', [item]);
   const f = out[0].json.payload.rule_flags.join(' | ');
-  for (const needle of ['uncertain', 'Scanned', '6.2%', 'tax year 2024']) assert.ok(f.includes(needle), `missing flag: ${needle} in ${f}`);
+  for (const needle of ['uncertain', 'Scanned', 'social_security_tax_withheld: box 4 (10) is not 6.2%',
+    'Extraction warning: no text could be read', 'tax year 2024']) assert.ok(f.includes(needle), `missing flag: ${needle} in ${f}`);
 });
 
 await test('prepare review: long 1099-B summarised for the assistant, kept whole for the log', async () => {

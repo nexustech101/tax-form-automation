@@ -1,0 +1,110 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--s-3);
+}
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--s-6);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: border-color 120ms, background-color 120ms;
+}
+
+.drop:hover:not(:disabled),
+.dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.drop svg {
+  width: 22px;
+  height: 22px;
+  margin-bottom: 4px;
+  color: var(--accent-text);
+}
+
+.dropTitle {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.dropHint {
+  font-size: var(--fs-xs);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 52px;
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.item > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.itemText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.detail {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+
+.open {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.ok {
+  color: var(--success);
+}
+
+.failed {
+  color: var(--danger);
+}
+
+.queued {
+  color: var(--text-3);
+}

@@ -1,0 +1,14 @@
+.page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.bar {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  padding: var(--s-3) var(--s-5) 0;
+}

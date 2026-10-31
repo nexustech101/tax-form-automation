@@ -10,6 +10,7 @@ from typing import Generic, Literal, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field
 
+from core.flags import Flag
 from core.forms import FORMS
 
 T = TypeVar("T")
@@ -115,8 +116,8 @@ class ValueSource(BaseModel):
 
 
 class ValidationReport(BaseModel):
-    valid: bool = Field(description="True when nothing was dropped, flagged or inconsistent.")
-    warnings: list[str]
+    valid: bool = Field(description="True when nothing was dropped, flagged or inconsistent (no flags).")
+    flags: list[Flag] = Field(description="What a reviewer should check, each with its field path and code.")
     fields_found: int
     fields_total: int
     sources: dict[str, ValueSource] = Field(
@@ -180,6 +181,7 @@ class BulkExtractResponse(BaseModel):
 
 class DocumentType(BaseModel):
     id: str
+    name: str = Field(description="Short form name for display, e.g. W-2, 1099-NEC, K-1 (1065).")
     title: str
     description: str
     json_schema: dict

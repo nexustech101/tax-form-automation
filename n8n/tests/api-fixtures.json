@@ -122,7 +122,7 @@
               },
               "validation": {
                 "valid": true,
-                "warnings": [],
+                "flags": [],
                 "fields_found": 24,
                 "fields_total": 33
               },
@@ -223,7 +223,7 @@
               },
               "validation": {
                 "valid": true,
-                "warnings": [],
+                "flags": [],
                 "fields_found": 24,
                 "fields_total": 33
               },
@@ -422,7 +422,7 @@
               },
               "validation": {
                 "valid": true,
-                "warnings": [],
+                "flags": [],
                 "fields_found": 24,
                 "fields_total": 33
               },
@@ -523,7 +523,7 @@
               },
               "validation": {
                 "valid": true,
-                "warnings": [],
+                "flags": [],
                 "fields_found": 24,
                 "fields_total": 33
               },

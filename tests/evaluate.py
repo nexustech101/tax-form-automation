@@ -171,7 +171,7 @@ def main() -> None:
                 print(f"    {f.path}: expected {f.expected!r} got {f.actual!r}")
             report.append({"document": doc.name, "expected_type": form_id, "document_type": data["document_type"],
                            "confidence": data["classification"]["confidence"], "field_accuracy": acc,
-                           "errors": [f.__dict__ for f in wrong], "warnings": data["validation"]["warnings"],
+                           "errors": [f.__dict__ for f in wrong], "flags": data["validation"]["flags"],
                            "timings_ms": data["timings_ms"]})
         for doc, expected in multi_documents(args.samples):
             if args.only and doc.stem.removesuffix("_scan") not in args.only:

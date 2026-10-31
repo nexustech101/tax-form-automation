@@ -1,91 +1,46 @@
-"""Document library and assistant, with the model providers replaced by httpx.MockTransport.
-
-The fake embedder hashes words into a vector, so texts sharing words are similar; the fake chat
-model replays scripted replies. Requests the code sends are recorded and checked against each
-provider's wire format.
-"""
+"""Document library and assistant, with the model providers replaced by httpx.MockTransport (tests/fakes.py)."""
 
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import io
-import json
-import re
-from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 import numpy as np
+import pypdfium2 as pdfium
 import pytest
 from fastapi.testclient import TestClient
 
 import agent
 from agent.agent import ChatClient, _anthropic_request
-from agent.config import AssistantConfig, load_config
-from agent.ingest import file_type, form_chunks, mask_ssns, read_file
-from agent.rag import ChunkDraft, DocumentDraft, Embedder, IndexMismatch, Library
-from agent.schema import ChatMessage, ChatRequest, FileType, SearchFilters
+from agent.config import load_config
+from agent.schema import ChatMessage, ChatRequest
 from core.config import PROJECT_ROOT
-from core.forms import Form1099B, W2
+from core.forms import W2, Form1099B
 from core.parser import UnsupportedDocument
-from core.schema import ClassificationResult, FormResult
+from core.utils import mask_ssns
+from library.ingest import file_type, form_chunks, read_file
+from library.schema import ReviewRequest, SearchFilters
+from library.search import Embedder
+from library.service import Library
+from library.store import IndexMismatch
 from tests.conftest import make_test_app
-
-DIM = 64
-
-
-def fake_vector(text: str) -> list[float]:
-    v = np.zeros(DIM)
-    for word in re.findall(r"\w+", text.lower()):
-        if word not in ("search_query", "search_document"):
-            v[int(hashlib.md5(word.encode()).hexdigest(), 16) % DIM] += 1
-    return v.tolist()
-
-
-class Embeddings(httpx.MockTransport):
-    def __init__(self):
-        self.inputs: list[str] = []
-
-        def handle(request: httpx.Request) -> httpx.Response:
-            body = json.loads(request.content)
-            self.inputs += body["input"]
-            return httpx.Response(200, json={"data": [{"index": i, "embedding": fake_vector(t)}
-                                                      for i, t in enumerate(body["input"])]})
-        super().__init__(handle)
-
-
-class Chat(httpx.MockTransport):
-    """Replays `replies` (provider JSON bodies) in order and records each request body."""
-
-    def __init__(self, replies: list[dict]):
-        self.requests: list[dict] = []
-        self.paths: list[str] = []
-        self.headers: list[httpx.Headers] = []
-
-        def handle(request: httpx.Request) -> httpx.Response:
-            self.requests.append(json.loads(request.content))
-            self.paths.append(request.url.path)
-            self.headers.append(request.headers)
-            return httpx.Response(200, json=replies[len(self.requests) - 1])
-        super().__init__(handle)
-
-
-def openai_tool_call(args: dict, call_id: str = "c1") -> dict:
-    return {"choices": [{"message": {"content": None, "tool_calls": [
-        {"id": call_id, "type": "function", "function": {"name": "search_documents", "arguments": json.dumps(args)}}]}}],
-        "usage": {"prompt_tokens": 100, "completion_tokens": 10}}
-
-
-def openai_answer(text: str) -> dict:
-    return {"choices": [{"message": {"content": text}}], "usage": {"prompt_tokens": 300, "completion_tokens": 20}}
-
-
-def config(tmp_path: Path, provider: str = "ollama", **chat) -> AssistantConfig:
-    raw = load_config(PROJECT_ROOT / "config" / "model_config.yml").model_dump()
-    raw["library"]["database"] = tmp_path / "library.db"
-    raw["chat"].update(provider=provider, **chat)
-    return AssistantConfig.model_validate(raw)
+from tests.fakes import (
+    REVIEWER,
+    Chat,
+    Embeddings,
+    add,
+    config,
+    draft,
+    fake_pipeline,
+    fake_vector,
+    form_result,
+    openai_answer,
+    openai_tool_call,
+    search,
+    stored_w2,
+)
 
 
 @pytest.fixture
@@ -93,19 +48,13 @@ def library(tmp_path):
     return Library(config(tmp_path).library, Embedder(config(tmp_path).embeddings, Embeddings()))
 
 
-def draft(text: str, *, client=None, tax_year=None, document_type="text", title="doc", owner_hash=None) -> DocumentDraft:
-    return DocumentDraft(title=title, type=FileType.TXT, length_bytes=len(text), location=f"{title}.txt",
-                         content_hash=owner_hash or hashlib.sha256((title + text).encode()).hexdigest(),
-                         client=client, tax_year=tax_year,
-                         chunks=[ChunkDraft(content=text, document_type=document_type)])
-
-
-def add(library: Library, d: DocumentDraft, owner: str = "1"):
-    return asyncio.run(library.add(d, owner))[0]
-
-
-def search(library: Library, query: str, owner: str | None = "1", **filters):
-    return asyncio.run(library.search(query, SearchFilters(**filters), owner))
+def blank_pdf(pages: int) -> bytes:
+    pdf = pdfium.PdfDocument.new()
+    for _ in range(pages):
+        pdf.new_page(612, 792)
+    out = io.BytesIO()
+    pdf.save(out)
+    return out.getvalue()
 
 
 # --- config ---------------------------------------------------------------------------------
@@ -162,21 +111,15 @@ def test_unsupported_files_are_refused():
         asyncio.run(read_file(None, b"\xff\xfe\x00bad", "notes.txt", chunk_chars=500))
 
 
-def _form(form_id, model, fields, pages=(1,)) -> FormResult:
-    c = ClassificationResult(document_type=form_id, confidence=1.0, probabilities={}, model="x")
-    return FormResult(index=0, status="ok", pages=list(pages), document_type=form_id, form_name=model.TITLE,
-                      classification=c, fields=model.model_validate(fields), text_layer=True, timings_ms={})
-
-
 def test_forms_become_field_lines_with_metadata_and_tables_split_by_rows():
-    w2 = _form("w2", W2, {"tax_year": 2025, "employee": {"name": "Maria Gonzalez", "tin": "412-56-7890"},
+    w2 = form_result("w2", W2, {"tax_year": 2025, "employee": {"name": "Maria Gonzalez", "tin": "412-56-7890"},
                           "wages_tips_other_comp": "68,412.55", "box12": [{"code": "D", "amount": "4,087.45"}]})
     (chunk,) = form_chunks(w2, 1500)
-    assert (chunk.document_type, chunk.tax_year, chunk.page_number) == ("w2", 2025, 1)
+    assert (chunk.document_type, chunk.tax_year, chunk.page_number, chunk.form_index) == ("w2", 2025, 1, 0)
     assert chunk.content.splitlines()[0] == "Form W-2 Wage and Tax Statement, tax year 2025 (page 1)"
     assert "wages_tips_other_comp: 68412.55" in chunk.content and "box12[0]: code: D; amount: 4087.45" in chunk.content
     sales = [{"description": f"{i} SH FUND", "proceeds": "1,000.00", "cost_basis": "900.00"} for i in range(60)]
-    chunks = form_chunks(_form("1099_b", Form1099B, {"tax_year": 2025, "transactions": sales}, pages=(2, 3)), 800)
+    chunks = form_chunks(form_result("1099_b", Form1099B, {"tax_year": 2025, "transactions": sales}, pages=(2, 3)), 800)
     assert len(chunks) > 3 and all(c.content.startswith("Form 1099-B") and len(c.content) <= 800 for c in chunks)
     assert sum(c.content.count("transactions[") for c in chunks) == 60
 
@@ -186,7 +129,7 @@ def test_pdfs_store_extracted_forms_and_the_text_of_other_pages():
     from core.parser import ParsedDocument
     from core.schema import FileResult
 
-    w2 = _form("w2", W2, {"tax_year": 2025, "wages_tips_other_comp": "68,412.55"}, pages=(1,))
+    w2 = form_result("w2", W2, {"tax_year": 2025, "wages_tips_other_comp": "68,412.55"}, pages=(1,))
     copy = w2.model_copy(update={"index": 1, "status": "duplicate", "pages": [2]})
     blocks = [Block(p, 30, 30, 400, 45, f"text of page {p}") for p in (1, 2, 3)]
     doc = ParsedDocument("f.pdf", "application/pdf", "0" * 64, 3, True, blocks, {}, 0)
@@ -194,10 +137,13 @@ def test_pdfs_store_extracted_forms_and_the_text_of_other_pages():
     async def extract_file(data, filename):
         return FileResult(filename=filename, status="ok", forms=[w2, copy]), doc
 
-    chunks = asyncio.run(read_file(SimpleNamespace(extract_file=extract_file), b"%PDF-1.7", "f.pdf",
-                                   chunk_chars=1500)).chunks
-    assert [(c.document_type, c.page_number) for c in chunks] == [("w2", 1), ("text", 3)]
+    result = asyncio.run(read_file(SimpleNamespace(extract_file=extract_file), blank_pdf(3), "f.pdf", chunk_chars=1500))
+    chunks = result.chunks
+    assert [(c.document_type, c.page_number, c.form_index) for c in chunks] == [("w2", 1, 0), ("text", 3, None)]
     assert chunks[1].content == "text of page 3" and chunks[1].section_title == "Page 3"
+    assert [f.status for f in result.forms] == ["ok", "duplicate"]  # every form is kept for review
+    assert result.media_type == "application/pdf" and [(p.n, p.width, p.height) for p in result.pages] == \
+        [(1, 612, 792), (2, 612, 792), (3, 612, 792)]
 
 
 # --- library --------------------------------------------------------------------------------
@@ -228,7 +174,7 @@ def test_keyword_index_finds_exact_identifiers(library):
 
 def test_documents_are_private_to_their_key_and_deduplicated(library):
     first = add(library, draft("dividends 812.40", title="div"), owner="1")
-    again, created = asyncio.run(library.add(draft("dividends 812.40", title="div"), "1"))
+    again, created = asyncio.run(library.add(draft("dividends 812.40", title="div"), "1", b"text"))
     assert again.id == first.id and not created
     assert search(library, "dividends", owner="2") == []
     assert library.get(first.id, "2") is None and not library.delete(first.id, "2")
@@ -250,15 +196,17 @@ def test_changing_the_embedding_model_is_refused(library, tmp_path):
 
 
 def test_semantic_scoring_in_batches_matches_brute_force(library, monkeypatch):
-    monkeypatch.setattr("agent.rag.BATCH", 7)
+    from library.search import semantic
+
+    monkeypatch.setattr("library.search.BATCH", 7)
     texts = [f"form {i} " + " ".join(f"word{(i * j) % 23}" for j in range(5)) for i in range(60)]
     for i, t in enumerate(texts):
         add(library, draft(t, title=f"d{i}"))
     query = "word3 word7 word11"
     q = np.array(fake_vector(query)) / np.linalg.norm(fake_vector(query))
     expected = sorted(texts, key=lambda t: -(np.array(fake_vector(t)) / np.linalg.norm(fake_vector(t))) @ q)[:3]
-    with library._connect() as conn:
-        top = library._semantic(conn.execute("SELECT seq, embedding FROM document_chunks"), q.astype(np.float32), 3)
+    with library.store.connect() as conn:
+        top = semantic(conn.execute("SELECT seq, embedding FROM document_chunks"), q.astype(np.float32), 3)
         contents = [conn.execute("SELECT content FROM document_chunks WHERE seq = ?", (s,)).fetchone()[0] for s in top]
     assert contents == expected
 
@@ -289,7 +237,9 @@ def test_assistant_searches_then_answers_with_numbered_sources(tmp_path):
     response = asyncio.run(assistant.reply(ChatRequest(messages=[ChatMessage(role="user", content="Mortgage interest?")]), "1"))
     assert response.message.content.endswith("[1].")
     assert [(s.n, s.title) for s in response.sources] == [(1, "okafor-1098")]
-    assert response.searches == 1 and response.usage == {"prompt_tokens": 400, "completion_tokens": 30}
+    assert [c.model_dump() for c in response.tool_calls] == [
+        {"name": "search_documents", "arguments": {"query": "mortgage interest", "tax_year": 2025}}]
+    assert response.usage == {"prompt_tokens": 400, "completion_tokens": 30}
     first, second = chat.requests
     assert chat.paths == ["/v1/chat/completions"] * 2
     assert first["messages"][0]["role"] == "system" and first["tools"][0]["function"]["name"] == "search_documents"
@@ -308,7 +258,7 @@ def test_scope_limits_searches_and_the_model_cannot_widen_it(tmp_path):
     add(library, draft("wages 51000.00", client="Patel", document_type="w2", title="patel-w2"))
     request = ChatRequest(messages=[ChatMessage(role="user", content="Wages?")], scope=SearchFilters(client="Okafor"))
     response = asyncio.run(assistant.reply(request, "1"))
-    assert chat.requests[1]["messages"][-1]["content"] == "error: searches are limited to client = Okafor"
+    assert chat.requests[1]["messages"][-1]["content"] == "error: this conversation is limited to client = Okafor"
     assert [s.title for s in response.sources] == ["okafor-w2"]
 
 
@@ -319,7 +269,7 @@ def test_last_round_has_no_tools_so_the_model_must_answer(tmp_path):
     assistant.settings = assistant.settings.model_copy(update={"max_tool_rounds": rounds})
     response = asyncio.run(assistant.reply(ChatRequest(messages=[ChatMessage(role="user", content="?")]), "1"))
     assert ["tools" in r for r in chat.requests] == [True, True, False]
-    assert response.searches == 2 and response.message.content == "Nothing found."
+    assert len(response.tool_calls) == 2 and response.message.content == "Nothing found."
 
 
 def test_anthropic_wire_format(tmp_path):
@@ -390,6 +340,7 @@ def test_library_and_assistant_routes(api):
     assert r.status_code == 201, r.text
     doc = r.json()["data"]
     assert (doc["type"], doc["client"], doc["chunks"], doc["document_types"]) == ("md", "Okafor", 1, ["text"])
+    assert (doc["media_type"], doc["page_count"], doc["forms"], doc["review_status"]) == ("text/markdown", 0, [], None)
     assert api.client.post("/v1/library/documents", files=files, headers=api.key).status_code == 200  # same file
 
     r = api.client.post("/v1/library/search", json={"query": "fee", "filters": {"client": "Okafor"}}, headers=api.key)
@@ -415,3 +366,94 @@ def test_library_routes_validate_input(api):
     assert r.status_code == 415
     assert api.client.post("/v1/assistant/chat", json={"messages": []}, headers=api.key).status_code == 422
     assert api.client.post("/v1/library/search", json={"query": "x"}).status_code == 401
+
+
+# --- tools ----------------------------------------------------------------------------------------
+
+
+def run_tool(name: str, args: dict, library, owner="1", scope=None, pipeline=None, jobs=None) -> str:
+    from agent.tools import TOOLS, ToolContext
+
+    ctx = ToolContext(library=library, scope=scope or SearchFilters(), owner=owner, pipeline=pipeline, jobs=jobs)
+    return asyncio.run(TOOLS[name].run(args, ctx))
+
+
+def test_list_documents_tool_reports_review_state_within_owner_and_scope(library):
+    doc = stored_w2(library)
+    add(library, draft("engagement letter", client="Okafor", title="letter"))
+    out = run_tool("list_documents", {"review_status": "pending"}, library)
+    assert out.startswith("1 document(s) match") and doc.id in out
+    assert "client Gonzalez" in out and "review pending: 1 pending, 0 approved, 2 open flags" in out
+    assert run_tool("list_documents", {}, library, owner="2").startswith("0 document(s)")
+    assert "letter" in run_tool("list_documents", {}, library, scope=SearchFilters(client="okafor"))
+    assert run_tool("list_documents", {"client": "Gonzalez"}, library, scope=SearchFilters(client="Okafor")) == \
+        "error: this conversation is limited to client = Okafor"
+    assert run_tool("list_documents", {"review_status": "done"}, library).startswith("error: invalid filters")
+
+
+def test_get_document_tool_shows_forms_open_flags_and_reviewed_values(library):
+    doc = stored_w2(library)
+    asyncio.run(library.review(doc.forms[0].id, "wages_tips_other_comp",
+                               ReviewRequest(decision="corrected", value="70,000.00"), REVIEWER, "1"))
+    out = run_tool("get_document", {"document_id": doc.id}, library)
+    assert f"Document {doc.id}: w2" in out and "2 open flag(s)" in out
+    assert "open flag employee.tin: unlabeled" in out and "Form 1" in out and "not a supported form" in out
+    assert "wages_tips_other_comp: 70000.0" in out and "68412.55" not in out  # reviewed values
+    assert "XXX-XX-7890" in out and "412-56-7890" not in out
+    missing = f"error: no document {doc.id} in this conversation's scope"
+    assert run_tool("get_document", {"document_id": doc.id}, library, owner="2") == missing
+    assert run_tool("get_document", {"document_id": doc.id}, library, scope=SearchFilters(client="Okafor")) == missing
+    assert run_tool("get_document", {"document_id": doc.id}, library,
+                    scope=SearchFilters(document_ids=["another"])) == missing
+    assert run_tool("get_document", {"document_id": doc.id}, library, owner=None).startswith("Document")  # admin
+    assert run_tool("get_document", {}, library) == "error: `document_id` is required"
+
+
+def test_classify_tool_runs_the_classifier_on_the_stored_file(library):
+    doc = stored_w2(library)
+    letter = add(library, draft("engagement letter", title="letter"))
+    pipeline = fake_pipeline()
+    out = run_tool("classify_document", {"document_id": doc.id, "pages": [1]}, library, pipeline=pipeline)
+    assert out.startswith("document_type: w2 (Form W-2") and "probabilities: w2 0.970" in out
+    assert pipeline.calls == ["classify 1 page(s)"]
+    assert "only PDFs and images" in run_tool("classify_document", {"document_id": letter.id}, library,
+                                              pipeline=pipeline)
+    assert run_tool("classify_document", {"document_id": doc.id}, library) == \
+        "error: document processing is not available"
+
+
+def test_extract_tool_returns_fields_and_flags_without_saving(library):
+    from core.jobs import JobGate
+
+    doc = stored_w2(library)
+    before = (library.get(doc.id, "1"), library.form(doc.forms[0].id, "1"))
+    pipeline, gate = fake_pipeline(), JobGate(running=1, queued=0)
+    out = run_tool("extract_document", {"document_id": doc.id}, library, pipeline=pipeline, jobs=gate)
+    assert out.startswith("Extraction of w2 (not saved):") and "wages_tips_other_comp: 68412.55" in out
+    assert "flag federal_income_tax_withheld: not_printed" in out and "flag form: partial_conversion" in out
+    assert "XXX-XX-7890" in out and gate.held == 0
+    assert (library.get(doc.id, "1"), library.form(doc.forms[0].id, "1")) == before  # nothing stored
+    run_tool("extract_document", {"document_id": doc.id, "document_type": "w2"}, library, pipeline=pipeline, jobs=gate)
+    assert pipeline.calls == ["extract_file", "extract w2"]
+    gate.held = gate.capacity
+    assert run_tool("extract_document", {"document_id": doc.id}, library, pipeline=pipeline, jobs=gate) == \
+        "error: The server is busy with other documents. Retry shortly."
+    assert run_tool("extract_document", {"document_id": doc.id}, library, owner="2", pipeline=pipeline).startswith(
+        "error: no document")
+    assert "unknown document_type" in run_tool("extract_document", {"document_id": doc.id, "document_type": "1040"},
+                                               library, pipeline=pipeline)
+
+
+def test_assistant_dispatches_registered_tools_and_lists_the_calls(tmp_path):
+    library, assistant, chat = assistant_with(tmp_path, [
+        openai_tool_call({"review_status": "pending"}, name="list_documents"),
+        openai_tool_call({"document_id": "x"}, call_id="c2", name="nope"),
+        openai_answer("One W-2 awaits review."),
+    ])
+    stored_w2(library)
+    response = asyncio.run(assistant.reply(ChatRequest(messages=[ChatMessage(role="user", content="Pending?")]), "1"))
+    assert [c.name for c in response.tool_calls] == ["list_documents", "nope"] and response.sources == []
+    assert {t["function"]["name"] for t in chat.requests[0]["tools"]} == {
+        "search_documents", "list_documents", "get_document", "classify_document", "extract_document"}
+    assert chat.requests[1]["messages"][-1]["content"].startswith("1 document(s) match")
+    assert chat.requests[2]["messages"][-1]["content"] == "error: unknown tool 'nope'"

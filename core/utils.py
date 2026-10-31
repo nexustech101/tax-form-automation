@@ -246,3 +246,14 @@ def parse_state(value: Any) -> str | None:
 
 def digits_only(text: str) -> str:
     return re.sub(r"\D", "", text)
+
+
+_SSN = re.compile(r"\b\d{3}([- ])\d{2}\1(\d{4})\b")
+
+
+def mask_ssns(text: str) -> str:
+    """*Usage:*
+    >>> mask_ssns("SSN 412-56-7890, EIN 84-1736295")
+    'SSN XXX-XX-7890, EIN 84-1736295'
+    """
+    return _SSN.sub(r"XXX-XX-\2", text)

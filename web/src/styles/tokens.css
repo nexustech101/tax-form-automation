@@ -1,0 +1,139 @@
+/* Design tokens. Light is the default; [data-theme="dark"] on <html> switches (src/app/theme.tsx). */
+:root {
+  color-scheme: light;
+  --font: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+  --fs-display: 28px;
+  --fs-chat: 15px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+
+  --r-sm: 4px;
+  --r: 6px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+  --r-2xl: 18px;
+  --r-full: 999px;
+
+  --sidebar: 216px;
+  --topbar: 56px;
+  --control-h: 32px;
+
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-hover: #f2f4f7;
+  --surface-sunken: #eef0f3;
+  --border: #e4e7ec;
+  --border-strong: #cfd4dc;
+  --text: #101828;
+  --text-2: #475467;
+  --text-3: #626b7d;
+  --text-on-accent: #ffffff;
+  --bubble: #e9ecf1;
+
+  --accent: #3b5bdb;
+  --accent-hover: #2f4bc4;
+  --accent-text: #3451c8;
+  --accent-soft: #eef1fd;
+  --accent-border: #c3cdf6;
+  --focus-ring: 0 0 0 3px rgb(59 91 219 / 0.28);
+
+  --success: #067647;
+  --success-soft: #ecfdf3;
+  --success-border: #abefc6;
+  --warning: #b54708;
+  --warning-soft: #fffaeb;
+  --warning-border: #fedf89;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --danger-border: #fecdca;
+  --info: #175cd3;
+  --info-soft: #eff8ff;
+  --info-border: #b2ddff;
+
+  --box: rgb(59 91 219 / 0.55);
+  --box-fill: rgb(59 91 219 / 0.06);
+  --box-flag: #dc6803;
+  --box-flag-fill: rgb(220 104 3 / 0.1);
+  --box-done: #079455;
+  --box-done-fill: rgb(7 148 85 / 0.08);
+  --box-selected: #3b5bdb;
+  --box-selected-fill: rgb(59 91 219 / 0.16);
+
+  --shadow-xs: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-sm: 0 1px 3px rgb(16 24 40 / 0.08), 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-lg: 0 16px 32px -8px rgb(16 24 40 / 0.16), 0 4px 8px -4px rgb(16 24 40 / 0.06);
+  --shadow-composer: 0 1px 2px rgb(16 24 40 / 0.04), 0 8px 24px -10px rgb(16 24 40 / 0.14);
+  --shadow-composer-focus: 0 1px 2px rgb(16 24 40 / 0.05), 0 12px 32px -10px rgb(16 24 40 / 0.2);
+  --shadow-popover: 0 12px 28px -6px rgb(16 24 40 / 0.16), 0 2px 6px -2px rgb(16 24 40 / 0.08);
+  --overlay: rgb(16 24 40 / 0.36);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0d0f13;
+  --surface: #15181d;
+  --surface-2: #191c22;
+  --surface-hover: #1f232a;
+  --surface-sunken: #101216;
+  --border: #272b33;
+  --border-strong: #363c46;
+  --text: #edeff2;
+  --text-2: #b3b9c3;
+  --text-3: #8a919c;
+  --text-on-accent: #ffffff;
+  --bubble: #22262e;
+
+  --accent: #4263eb;
+  --accent-hover: #4c6ef5;
+  --accent-text: #91a7ff;
+  --accent-soft: rgb(76 110 245 / 0.14);
+  --accent-border: rgb(116 143 252 / 0.38);
+  --focus-ring: 0 0 0 3px rgb(116 143 252 / 0.4);
+
+  --success: #4fd18f;
+  --success-soft: rgb(79 209 143 / 0.1);
+  --success-border: rgb(79 209 143 / 0.3);
+  --warning: #fbb53c;
+  --warning-soft: rgb(251 181 60 / 0.1);
+  --warning-border: rgb(251 181 60 / 0.3);
+  --danger: #f97a70;
+  --danger-soft: rgb(249 122 112 / 0.1);
+  --danger-border: rgb(249 122 112 / 0.32);
+  --info: #6cb8ff;
+  --info-soft: rgb(108 184 255 / 0.1);
+  --info-border: rgb(108 184 255 / 0.3);
+
+  --box: rgb(145 167 255 / 0.6);
+  --box-fill: rgb(145 167 255 / 0.08);
+  --box-flag: #f79009;
+  --box-flag-fill: rgb(247 144 9 / 0.14);
+  --box-done: #17b26a;
+  --box-done-fill: rgb(23 178 106 / 0.12);
+  --box-selected: #5c7cfa;
+  --box-selected-fill: rgb(92 124 250 / 0.2);
+
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.25);
+  --shadow-lg: 0 16px 40px -8px rgb(0 0 0 / 0.6), 0 4px 10px -4px rgb(0 0 0 / 0.4);
+  --shadow-composer: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -10px rgb(0 0 0 / 0.55);
+  --shadow-composer-focus: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px -10px rgb(0 0 0 / 0.65);
+  --shadow-popover: 0 12px 32px -6px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+  --overlay: rgb(0 0 0 / 0.55);
+}

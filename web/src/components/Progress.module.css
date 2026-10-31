@@ -1,0 +1,17 @@
+.track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 200ms ease-out;
+}
+
+.done {
+  background: var(--box-done);
+}

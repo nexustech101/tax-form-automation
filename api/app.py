@@ -10,9 +10,14 @@ middleware, error handlers and routers. Routes live in `api/routes/`.
     GET  /health                      readiness (no auth)
     GET  /auth/me                     check a key
     POST|GET|DELETE /api-keys         key management (admin)
-    POST|GET|DELETE /v1/library/documents[/{id}]   document library for the assistant
+    POST|GET|DELETE /v1/library/documents[/{id}]   stored documents, their forms and originals
+    GET  /v1/library/documents/{id}/pages/{n} | /file   page PNG, original file
+    GET  /v1/library/stats            dashboard counts
+    GET  /v1/library/forms/{id}       a form as review checks
+    PUT|DELETE /v1/library/forms/{id}/reviews/{field}, POST .../approve | .../reopen   review
     POST /v1/library/search           filtered semantic + keyword search
-    POST /v1/assistant/chat           questions answered from the library
+    POST /v1/assistant/chat           questions answered from the library, with read-only tools
+    GET  /*                           the dashboard (web/dist), when built
 
 *Usage:*
 >>> app = create_app()                      # uvicorn main:app
@@ -25,6 +30,7 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
@@ -33,17 +39,21 @@ from fastapi.responses import RedirectResponse
 import agent
 from agent.agent import Assistant
 from agent.config import load_config
-from agent.rag import Library
 from api import errors
-from api.deps import MB, BodyLimit, JobGate, RateWindows
+from api.deps import MB, BodyLimit, RateWindows
 from api.routes import assistant as assistant_routes
-from api.routes import documents, keys, library as library_routes, system
-from core.config import Settings, get_settings
+from api.routes import documents, keys, library as library_routes, reviews, system
+from api.web import mount_dashboard
+from core.config import PROJECT_ROOT, Settings, get_settings
 from core.db import db, init_db
+from core.jobs import JobGate
 from core.pipeline import TaxDocumentPipeline
 from core.utils import setup_logging
+from library.service import Library
 
 log = logging.getLogger("tax_doc_api")
+
+WEB_DIST = PROJECT_ROOT / "web" / "dist"
 
 DISCLAIMER = (
     "Output is machine-extracted decision support, not tax or legal advice. A qualified person must review "
@@ -57,8 +67,13 @@ def create_app(
     load_models: bool = True,
     dispose_db_on_shutdown: bool = True,
     assistant: tuple[Library, Assistant] | None = None,
+    web_dist: Path | None = WEB_DIST,
 ) -> FastAPI:
-    """`assistant`: (library, assistant) to use instead of building them from `settings.assistant_config`."""
+    """
+    `assistant`: (library, assistant) to use instead of building them from
+    `settings.assistant_config`. `web_dist`: the built dashboard, served at `/`
+    when it has an `index.html` (otherwise `/` redirects to `/docs`).
+    """
     settings = settings or get_settings()
     pipeline = pipeline or TaxDocumentPipeline(settings)
     library, assistant_ = assistant or agent.build(load_config(settings.assistant_config))
@@ -77,7 +92,7 @@ def create_app(
 
     app = FastAPI(
         title=settings.app_name,
-        version="1.1.0",
+        version="2.0.0",
         lifespan=lifespan,
         description="Identify US tax forms and extract their fields into validated JSON.\n\n" + DISCLAIMER,
     )
@@ -116,10 +131,14 @@ def create_app(
     app.include_router(keys.router)
     app.include_router(documents.router)
     app.include_router(library_routes.router)
+    app.include_router(reviews.router)
     app.include_router(assistant_routes.router)
 
-    @app.get("/", include_in_schema=False)
-    async def root() -> RedirectResponse:
-        return RedirectResponse(url="/docs")
+    if web_dist is not None and (web_dist / "index.html").is_file():
+        mount_dashboard(app, web_dist)  # last: only paths no API route matched
+    else:
+        @app.get("/", include_in_schema=False)
+        async def root() -> RedirectResponse:
+            return RedirectResponse(url="/docs")
 
     return app

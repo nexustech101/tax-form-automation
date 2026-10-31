@@ -19,13 +19,16 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from agent.agent import ChatUnavailable
-from agent.rag import EmbeddingsUnavailable, IndexMismatch
 from core.extractor import ExtractorUnavailable
 from core.forms import FORMS
+from core.jobs import Busy
 from core.parser import SUPPORTED_MEDIA_TYPES, ConversionFailed, DocumentTooLarge, UnsupportedDocument
 from core.pipeline import MultipleForms, UnclassifiableDocument, _classification
 from core.schema import ErrorResponse
 from core.tev import ClassifierUnavailable
+from library.review import ApprovalBlocked, InvalidValue, NotReviewable
+from library.search import EmbeddingsUnavailable
+from library.store import IndexMismatch, OutdatedLibrary
 
 log = logging.getLogger("tax_doc_api")
 
@@ -50,17 +53,23 @@ DOMAIN_ERRORS: dict[type[Exception], tuple[int, str, Callable[[Any], dict | None
     EmbeddingsUnavailable: (503, "model_unavailable", lambda e: None),
     ChatUnavailable: (503, "model_unavailable", lambda e: None),
     IndexMismatch: (409, "index_mismatch", lambda e: None),
+    ApprovalBlocked: (409, "review_incomplete", lambda e: {"undecided": e.undecided}),
+    NotReviewable: (409, "not_reviewable", lambda e: None),
+    InvalidValue: (422, "invalid_value", lambda e: {"field": e.field}),
+    Busy: (503, "busy", lambda e: None),
+    OutdatedLibrary: (500, "outdated_library", lambda e: None),
 }
 
 DESCRIPTIONS = {
     400: "Empty or malformed request",
     401: "Missing or invalid API key",
     404: "Not found",
-    409: "The library was built with another embedding model",
+    409: "Conflict: library built with another embedding model, or a review rule (approval with undecided "
+         "flagged fields, reviewing an unsupported or duplicate form)",
     403: "Admin key required",
     413: "File, file count or page count over the limit",
     415: "Not a PDF or supported image",
-    422: "Unreadable, unsupported or multi-form document",
+    422: "Unreadable, unsupported or multi-form document; invalid request or corrected value",
     429: "Rate limit exceeded",
     503: "Server busy, or a model backend is unavailable",
 }
@@ -100,6 +109,10 @@ def register(app: FastAPI) -> None:
 
     async def domain_error(request: Request, exc: Exception):
         status, code, details = DOMAIN_ERRORS[type(exc)]
+        if code == "busy":
+            return error_response(request, 503, code, str(exc), headers={"Retry-After": "30"})
+        if code == "outdated_library":
+            log.error("outdated library database", extra={"ctx": {"error": str(exc)}})
         if status == 503:
             log.error("model backend unavailable", extra={"ctx": {"error": str(exc)}})
             return error_response(

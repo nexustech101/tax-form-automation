@@ -12,14 +12,15 @@ Conversations are kept in OpenAI's message format (system / user / assistant
 with `tool_calls` / tool) and converted at the edge for Anthropic.
 
 `Assistant.reply` runs the tool loop: the model either answers or calls
-tools; tool results go back as messages; after `max_tool_rounds` rounds the
-model is asked once more without tools, so it must answer. Every excerpt a
-search returns is numbered once per conversation turn and returned as
-`sources`, which the answer cites as [n].
+tools (`agent.tools.TOOLS`); tool results go back as messages; after
+`max_tool_rounds` rounds the model is asked once more without tools, so it
+must answer. Every excerpt a search returns is numbered once per conversation
+turn and returned as `sources`, which the answer cites as [n]; every call is
+listed in `tool_calls`.
 
 *Usage:*
 >>> assistant = Assistant(config.assistant, ChatClient(config.chat), library)
->>> response = await assistant.reply(ChatRequest(messages=[...]), owner="7")
+>>> response = await assistant.reply(ChatRequest(messages=[...]), owner="7", pipeline=pipeline, jobs=jobs)
 """
 
 from __future__ import annotations
@@ -32,9 +33,10 @@ from dataclasses import dataclass, field
 import httpx
 
 from agent.config import AssistantSettings, ChatConfig
-from agent.rag import Library
-from agent.schema import ChatMessage, ChatRequest, ChatResponse, SearchFilters, SearchHit, Source
-from agent.tools import search_documents, search_spec
+from agent.schema import ChatMessage, ChatRequest, ChatResponse, ToolCallInfo
+from agent.tools import TOOLS, ToolContext
+from core.jobs import JobGate
+from library.service import Library
 
 log = logging.getLogger(__name__)
 ANTHROPIC_VERSION = "2023-06-01"
@@ -81,6 +83,8 @@ def _openai_reply(data: dict) -> Reply:
         try:
             arguments = json.loads(arguments) if isinstance(arguments, str) else arguments
         except json.JSONDecodeError:
+            pass
+        if not isinstance(arguments, dict):
             arguments = {"_invalid": arguments}
         calls.append(ToolCall(call.get("id") or f"call_{len(calls)}", call["function"]["name"], arguments))
     return Reply(message.get("content") or "", calls, data.get("usage") or {})
@@ -167,14 +171,16 @@ class Assistant:
         self.settings = settings
         self.chat = chat
         self.library = library
-        self.tools = [search_spec(library.config.max_results)]
+        self.tools = [t.spec for t in TOOLS.values()]
 
-    async def reply(self, request: ChatRequest, owner: str | None) -> ChatResponse:
+    async def reply(self, request: ChatRequest, owner: str | None, pipeline=None,
+                    jobs: JobGate | None = None) -> ChatResponse:
+        """`owner`: the caller's API key id (None: admin). `pipeline` / `jobs` serve the classify and extract tools."""
+        ctx = ToolContext(library=self.library, scope=request.scope, owner=owner, pipeline=pipeline, jobs=jobs)
         messages = [{"role": "system", "content": self.settings.system_prompt}]
         messages += [m.model_dump() for m in request.messages]
-        sources: dict[str, Source] = {}
         usage: Counter = Counter()
-        searches = 0
+        calls: list[ToolCallInfo] = []
         rounds = self.settings.max_tool_rounds
         for round_ in range(rounds + 1):
             reply = await self.chat.complete(messages, self.tools if round_ < rounds else [])
@@ -183,35 +189,18 @@ class Assistant:
                 break
             messages.append(_assistant_turn(reply))
             for call in reply.tool_calls:
-                searches += 1
-                messages.append({"role": "tool", "tool_call_id": call.id,
-                                 "content": await self._run(call, request.scope, owner, sources)})
-        log.info("assistant replied", extra={"ctx": {"searches": searches, "sources": len(sources), **usage}})
+                calls.append(ToolCallInfo(name=call.name, arguments=call.arguments))
+                messages.append({"role": "tool", "tool_call_id": call.id, "content": await self._run(call, ctx)})
+        log.info("assistant replied", extra={"ctx": {"tools": [c.name for c in calls], "sources": len(ctx.sources),
+                                                     **usage}})
         return ChatResponse(
             message=ChatMessage(role="assistant", content=reply.text.strip() or "The model returned no answer."),
-            sources=list(sources.values()), searches=searches, model=self.chat.config.model, usage=dict(usage))
+            sources=list(ctx.sources.values()), tool_calls=calls, model=self.chat.config.model, usage=dict(usage))
 
-    async def _run(self, call: ToolCall, scope: SearchFilters, owner: str | None, sources: dict[str, Source]) -> str:
-        """Run one tool call; returns the text the model reads. Hits get stable source numbers."""
-        if call.name != "search_documents":
+    @staticmethod
+    async def _run(call: ToolCall, ctx: ToolContext) -> str:
+        """Run one tool call; returns the text the model reads."""
+        tool = TOOLS.get(call.name)
+        if tool is None:
             return f"error: unknown tool {call.name!r}"
-        hits = await search_documents(call.arguments, library=self.library, scope=scope, owner=owner)
-        if isinstance(hits, str):
-            return hits
-        if not hits:
-            return "No matching documents."
-        out = []
-        for hit in hits:
-            source = sources.setdefault(hit.chunk_id, Source(n=len(sources) + 1, **hit.model_dump()))
-            out.append(f"[{source.n}] {_label(hit)}\n{hit.content}")
-        return "\n\n".join(out)
-
-
-def _label(hit: SearchHit) -> str:
-    """'title (1098, client Okafor, tax year 2025, page 2)': what the model sees above each excerpt."""
-    details = [hit.document_type]
-    for name, value in (("client", hit.client), ("tax year", hit.tax_year), ("page", hit.page_number),
-                        ("sheet", hit.sheet_name)):
-        if value:
-            details.append(f"{name} {value}")
-    return f"{hit.title} ({', '.join(details)})"
+        return await tool.run(call.arguments, ctx)

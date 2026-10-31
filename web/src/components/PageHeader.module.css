@@ -1,0 +1,28 @@
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+
+.text {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin-bottom: var(--s-1);
+  font-size: var(--fs-sm);
+}
+
+.description {
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  gap: var(--s-2);
+}

@@ -1,0 +1,384 @@
+.composer {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-composer);
+  cursor: text;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+
+.composer:focus-within {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-composer-focus);
+}
+
+.input {
+  display: block;
+  width: 100%;
+  padding: 14px 18px 4px;
+  border: 0;
+  outline: 0;
+  background: none;
+  font-size: var(--fs-chat);
+  line-height: 24px;
+  resize: none;
+  overflow-y: hidden;
+}
+
+.input:focus-visible {
+  box-shadow: none;
+}
+
+.input::placeholder {
+  color: var(--text-3);
+}
+
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-2);
+  padding: var(--s-2) 10px 10px;
+  cursor: default;
+}
+
+.tools {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.plus,
+.send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms, border-color 120ms, opacity 120ms;
+}
+
+.plus {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+}
+
+.plus:hover:not(:disabled),
+.plus[aria-expanded="true"] {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.plus:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.plus svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 150ms;
+}
+
+.plus[aria-expanded="true"] svg {
+  transform: rotate(45deg);
+}
+
+.send {
+  border: 0;
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.send:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.send:disabled {
+  background: var(--border);
+  color: var(--text-3);
+  cursor: default;
+}
+
+.send svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.4;
+}
+
+.stop {
+  position: relative;
+  background: var(--text);
+  color: var(--surface);
+}
+
+.stop:hover:not(:disabled) {
+  background: var(--text-2);
+}
+
+.stop svg {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+  stroke: none;
+}
+
+/* A ring that turns while the answer is pending. */
+.stop::after {
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--accent-border);
+  border-top-color: var(--accent);
+  border-radius: var(--r-full);
+  content: "";
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 32px;
+  padding: 0 10px 0 11px;
+  border: 1px solid transparent;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+
+.pill:hover,
+.pill[aria-expanded="true"] {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.pill > svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--text-3);
+}
+
+.pillSet {
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.chevron {
+  transition: transform 150ms;
+}
+
+.pill[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.chip > svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--accent-text);
+}
+
+.chip button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.chip button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.chip button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.uploading {
+  padding-right: 12px;
+  color: var(--text-2);
+}
+
+.uploading > span:first-child {
+  color: var(--accent-text);
+}
+
+.chipNote {
+  flex: none;
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+.uploadError {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-1) 12px 0;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--r-lg);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  cursor: default;
+}
+
+.uploadError > svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.uploadError span {
+  flex: 1;
+}
+
+.uploadError button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.uploadError button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.hintIcon {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 320px;
+  max-width: 100%;
+}
+
+.pickerHead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.back {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.back:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.back svg {
+  width: 16px;
+  height: 16px;
+}
+
+.search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--s-2);
+  height: 32px;
+  padding: 0 var(--s-2);
+  color: var(--text-3);
+}
+
+.search svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+}
+
+.search input:focus-visible {
+  box-shadow: none;
+}
+
+.search input::placeholder {
+  color: var(--text-3);
+}
+
+.pickerNote {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 10px var(--s-2);
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}

@@ -1,6 +1,6 @@
 """Pipeline regressions with stand-in parser and extractor: duplicates, partial conversions, missing pages.
 
-The real splitting, classification by printed heading, identity and warnings run; only Docling and the LLM are faked.
+The real splitting, classification by printed heading, identity and flags run; only Docling and the LLM are faked.
 """
 
 from __future__ import annotations
@@ -94,8 +94,8 @@ def test_partial_conversion_is_reported_on_the_file_and_every_form():
     assert file.document.conversion_errors == ["Page 2: layout model failed"]
     (form,) = file.forms
     assert form.pages == [1, 3] and not form.validation.valid
-    assert any("only partly converted" in w for w in form.validation.warnings)
-    assert any("page(s) 2 inside this form" in w for w in form.validation.warnings)
+    assert [(f.field, f.code) for f in form.validation.flags] == [(None, "partial_conversion"), (None, "missing_page")]
+    assert "page(s) 2 inside this form" in form.validation.flags[1].message
 
 
 def test_blank_page_between_single_page_forms_is_listed_but_flags_no_form():

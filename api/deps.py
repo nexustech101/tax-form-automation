@@ -1,29 +1,28 @@
 """deps.py
 
-FastAPI dependencies and limits: API-key auth, the shared pipeline and
-settings, per-key rate limits, the extraction job gate, request body size and
-bounded upload reading.
+FastAPI dependencies and limits: API-key auth, the shared pipeline, library,
+assistant and settings, per-key rate limits, the extraction job slot, request
+body size and bounded upload reading.
 """
 
 from __future__ import annotations
 
-import asyncio
 import math
 import threading
 import time
 from collections import defaultdict, deque
-from contextlib import asynccontextmanager
 from typing import Annotated, AsyncIterator, Optional
 
 from fastapi import Depends, HTTPException, Request, Security, UploadFile
 from fastapi.security import APIKeyHeader
 
 from agent.agent import Assistant
-from agent.rag import Library
 from core.auth import find_active_key, hash_key
 from core.config import Settings
+from core.jobs import JobGate
 from core.models import ApiKey
 from core.pipeline import TaxDocumentPipeline
+from library.service import Library
 
 MB = 1024 * 1024
 
@@ -67,15 +66,25 @@ def get_assistant(request: Request) -> Assistant:
     return request.app.state.assistant
 
 
+def get_jobs(request: Request) -> JobGate:
+    return request.app.state.jobs
+
+
 def owner_scope(key: ApiKey) -> str | None:
     """Library documents a key may read: its own, or every key's for admin keys (None)."""
     return None if key.is_admin else str(key.id)
+
+
+def reviewer(key: ApiKey) -> tuple[int, str]:
+    """Who a review decision or approval is recorded under: the key's id and name."""
+    return key.id, key.name
 
 
 PipelineDep = Annotated[TaxDocumentPipeline, Depends(get_pipeline)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 LibraryDep = Annotated[Library, Depends(get_library)]
 AssistantDep = Annotated[Assistant, Depends(get_assistant)]
+JobsDep = Annotated[JobGate, Depends(get_jobs)]
 
 # --- Rate limits -------------------------------------------------------------
 
@@ -125,32 +134,7 @@ class RateLimit:
         client = hash_key(raw_key) if raw_key else (request.client.host if request.client else "local")
         request.app.state.rate_windows.hit(self.scope, client, calls, seconds)
 
-# --- Extraction jobs -----------------------------------------------------------
-
-
-class JobGate:
-    """
-    At most `running` extraction jobs run at once (Docling, the LLM and the
-    uploaded files in memory); `queued` more may wait. Beyond that a request is
-    refused at once with 503 instead of piling up. In-process, like RateLimit.
-    """
-
-    def __init__(self, running: int, queued: int):
-        self.slots = asyncio.Semaphore(max(1, running))
-        self.capacity = max(1, running) + max(0, queued)
-        self.held = 0  # running + waiting
-
-    @asynccontextmanager
-    async def slot(self) -> AsyncIterator[None]:
-        if self.held >= self.capacity:
-            raise HTTPException(503, "The server is busy with other documents. Retry shortly.",
-                                headers={"Retry-After": "30"})
-        self.held += 1
-        try:
-            async with self.slots:
-                yield
-        finally:
-            self.held -= 1
+# --- Extraction jobs (core.jobs.JobGate) -----------------------------------------
 
 
 async def job_slot(request: Request) -> AsyncIterator[None]:

@@ -1,6 +1,8 @@
 """grounding.py
 
-Checks every extracted amount and TIN against where it is printed.
+Checks every extracted amount and TIN against where it is printed, and
+records where the other values (names, addresses, codes, dates, years,
+checkboxes) were read.
 
 Each value is looked up in the paired layout (`core.layout.pair_blocks`):
 the label anchors with the values attached to their boxes, plus unlabeled
@@ -9,11 +11,18 @@ text. Per value:
 | Printed where                                    | Result                                    |
 |--------------------------------------------------|-------------------------------------------|
 | in the box of its own label                      | kept; source = that label and position    |
-| only in other labels' boxes, own label found     | removed: swapped into the wrong field     |
-| unlabeled text, or its own label isn't on the page | kept, with a warning to check it        |
-| nowhere                                          | removed: not in the document              |
+| only in other labels' boxes, own label found     | removed: swapped (`wrong_label`)          |
+| unlabeled text, or its own label isn't on the page | kept, flagged `unlabeled` to check it   |
+| nowhere                                          | removed: not in the document (`not_printed`) |
 
 Zero is a value like any other: a blank box is not "0.00".
+
+Other values are only located, never removed or flagged: their source is the
+first block whose normalised text contains the value (dates in their usual
+printed spellings), searched under the field's own label first (a party's
+fields under the party's label), then anywhere on the form's pages; values of
+one or two characters (state, box 12 code) must be a whole block outside their
+own label. A checkbox's source is its printed label.
 
 Values inside `rows(...)` lists (W-2 box 12, state rows, K-1 codes) are
 looked up under the list's and the row model's labels. Rows read by
@@ -30,13 +39,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 from difflib import SequenceMatcher
 
 from pydantic import BaseModel
 
+from core.flags import Flag
 from core.forms import _submodel
-from core.layout import Block, _strip_box_prefix
+from core.layout import Block, _norm, _strip_box_prefix
 from core.schema import ValueSource
 from core.utils import parse_money, parse_tin
 
@@ -48,7 +59,7 @@ _TIN = re.compile(r"[\dX*]{2,3}[- ]?[\dX*]{2,7}[- ]?[\dX*]{0,4}")
 class Verification:
     sources: dict[str, ValueSource] = field(default_factory=dict)
     dropped: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
+    flags: list[Flag] = field(default_factory=list)
 
 
 @dataclass
@@ -86,6 +97,15 @@ def _tins(text: str) -> set[str]:
     return out
 
 
+def _spellings(value: object) -> list[str]:
+    """Normalised (`layout._norm`) ways a non-amount value may be printed."""
+    if isinstance(value, date):
+        m, d, y = value.month, value.day, value.year
+        return [f"{m:02d} {d:02d} {y}", f"{m} {d} {y}", f"{m:02d} {d:02d} {y % 100:02d}", f"{y} {m:02d} {d:02d}"]
+    text = _norm(str(value))
+    return [text] if text else []
+
+
 def _key(value: object) -> tuple[str, object] | None:
     """What to look for in the text: ('amount', abs value) or ('tin', digits with X)."""
     if isinstance(value, Decimal):
@@ -96,10 +116,11 @@ def _key(value: object) -> tuple[str, object] | None:
 
 
 class _Index:
-    """Where every amount and TIN is printed, by label."""
+    """Where every amount and TIN is printed, by label; every printed block for locating other values."""
 
     def __init__(self, paired: list[Block]):
         self.where: dict[tuple[str, object], list[_Found]] = {}
+        self.found: list[_Found] = []
         attached = {id(v) for b in paired for v in b.values}
         for b in paired:
             if b.is_label:
@@ -110,6 +131,7 @@ class _Index:
         self.anchors = [b for b in paired if b.is_label]
 
     def _add(self, found: _Found) -> None:
+        self.found.append(found)
         for amount in _amounts(found.block.text):
             self.where.setdefault(("amount", amount), []).append(found)
         for tin in _tins(found.block.text):
@@ -168,8 +190,8 @@ def _row_source(label: str, line: list[Block]) -> ValueSource:
 
 def verify(form: BaseModel, paired: list[Block], table_lines: dict[str, list[list[Block]]] | None = None) -> Verification:
     """
-    Check every amount and TIN of `form` against `paired` (output of `pair_blocks`).
-    Removes values that are not printed or sit under another label, in place.
+    Check every amount and TIN of `form` against `paired` (output of `pair_blocks`) and locate the other values.
+    Removes amounts and TINs that are not printed or sit under another label, in place.
     `table_lines`: field name -> printed lines of each row read by `core.tables`.
     """
     index = _Index(paired)
@@ -180,7 +202,7 @@ def verify(form: BaseModel, paired: list[Block], table_lines: dict[str, list[lis
         key = _key(value)
         if key is None:
             return
-        shown = f"TIN ending {str(value)[-4:]}" if key[0] == "tin" else str(value)  # warnings reach logs and emails
+        shown = f"TIN ending {str(value)[-4:]}" if key[0] == "tin" else str(value)  # flags reach logs and emails
         found = index.where.get(key, [])
         own = index.labelled(labels)
         under_own = [f for f in found if f.anchor is not None and f.anchor in own]
@@ -189,17 +211,34 @@ def verify(form: BaseModel, paired: list[Block], table_lines: dict[str, list[lis
         elif not found:
             setattr(owner, name, None)
             result.dropped.append(path)
-            result.warnings.append(f"{path}: removed, {shown} is not printed in the document")
+            result.flags.append(Flag(field=path, code="not_printed",
+                                     message=f"removed, {shown} is not printed in the document"))
         elif own and all(f.anchor is not None for f in found):
             setattr(owner, name, None)
             result.dropped.append(path)
             other = found[0].anchor.text
-            result.warnings.append(f"{path}: removed, {shown} is printed under '{other}', not under its own label")
+            result.flags.append(Flag(field=path, code="wrong_label",
+                                     message=f"removed, {shown} is printed under '{other}', not under its own label"))
         else:
             result.sources[path] = _source(found[0])
-            result.warnings.append(f"{path}: {shown} is printed in the document, but not in its labeled box; check it")
+            result.flags.append(Flag(field=path, code="unlabeled",
+                                     message=f"{shown} is printed in the document, but not in its labeled box; check it"))
 
-    def walk(obj: BaseModel, path: str, inherited: list[str] | None) -> None:
+    def locate(value: object, path: str, labels: list[str]) -> None:
+        """Source of a value that is not checked: under its own label first, then anywhere; never removed."""
+        own = index.labelled(labels)
+        if isinstance(value, bool):
+            if own:
+                result.sources[path] = _source(_Found(own[0], own[0]))
+            return
+        wanted = [f" {s} " for s in _spellings(value)]
+        for found in [f for f in index.found if f.anchor in own] + index.found + [_Found(None, a) for a in index.anchors]:
+            text = f" {_norm(found.block.text)} "
+            if any(w in text and (len(w) > 4 or found.anchor in own or text == w) for w in wanted):
+                result.sources[path] = _source(found)
+                return
+
+    def walk(obj: BaseModel, path: str, inherited: list[str] | None, around: list[str] | tuple = ()) -> None:
         for name, info in type(obj).model_fields.items():
             value = getattr(obj, name)
             here = f"{path}{name}"
@@ -216,11 +255,13 @@ def verify(form: BaseModel, paired: list[Block], table_lines: dict[str, list[lis
                 party_tin = _labels(info, "tin_label")
                 if party_tin and getattr(value, "tin", None):
                     check(value, "tin", value.tin, f"{here}.tin", party_tin)
-                walk(value, here + ".", inherited)
+                walk(value, here + ".", inherited, labels or around)
             elif isinstance(value, Decimal):
                 check(obj, name, value, here, labels)
             elif (name == "ssn" or name.endswith("_ssn")) and isinstance(value, str):
                 check(obj, name, value, here, labels)
+            elif value is not None and here not in result.sources:  # party TINs are checked above
+                locate(value, here, labels or around)
 
     walk(form, "", None)
     return result

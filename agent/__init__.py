@@ -1,4 +1,4 @@
-"""AI assistant: a document library searched by meaning and keywords, and a tool-using chat model over HTTP."""
+"""AI assistant: a tool-using chat model over HTTP, answering from the document library."""
 
 from __future__ import annotations
 
@@ -6,7 +6,8 @@ import httpx
 
 from agent.agent import Assistant, ChatClient
 from agent.config import AssistantConfig
-from agent.rag import Embedder, Library
+from library.search import Embedder
+from library.service import Library
 
 
 def build(config: AssistantConfig, chat_transport: httpx.AsyncBaseTransport | None = None,

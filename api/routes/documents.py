@@ -124,7 +124,7 @@ def document_types() -> Envelope[list[DocumentType]]:
     """Supported forms and the JSON schema of each one's `fields` object."""
     return Envelope(data=[
         DocumentType(
-            id=form_id, title=form.TITLE, description=form.HINT,
+            id=form_id, name=form.NAME, title=form.TITLE, description=form.HINT,
             json_schema=form.model_json_schema(mode="serialization")
         )
         for form_id, form in FORMS.items()

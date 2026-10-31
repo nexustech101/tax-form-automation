@@ -1,0 +1,315 @@
+/* Page welcome: the greeting and composer sit just above the middle; suggestions and cards hang below. */
+.welcome {
+  display: grid;
+  flex: 1;
+  grid-template-rows: minmax(var(--s-6), 0.85fr) auto minmax(0, 1fr);
+  min-height: 0;
+  padding: var(--s-6) var(--s-6) var(--s-8);
+  overflow-y: auto;
+}
+
+.welcome::before {
+  content: "";
+}
+
+.welcomeMain,
+.welcomeBelow {
+  justify-self: center;
+  width: 100%;
+  max-width: 720px;
+}
+
+.welcomeBelow {
+  align-self: start;
+}
+
+.greeting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-6);
+  font-size: var(--fs-display);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms, border-color 120ms, color 120ms;
+}
+
+.pill:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.pill svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--text-3);
+}
+
+.review {
+  margin-top: var(--s-10);
+}
+
+.reviewHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.reviewHead h2 {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.reviewHead a {
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.reviewHead a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.reviewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.reviewCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+
+.reviewCard:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.reviewIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--surface-sunken);
+  color: var(--text-2);
+}
+
+.reviewIcon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.reviewText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.reviewTitle {
+  font-weight: 500;
+}
+
+.reviewMeta {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+
+.flags {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--r-full);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+
+/* Panel welcome: intro and suggestions above the docked composer. */
+.panelWelcome {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-height: 0;
+  padding: var(--s-6) var(--s-4) var(--s-4);
+  overflow-y: auto;
+}
+
+.panelIntro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.panelIntro svg {
+  margin-bottom: 4px;
+}
+
+.panelIntro h3 {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.panelIntro p {
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms, color 120ms;
+}
+
+.listItem:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.listItem svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--text-3);
+}
+
+/* Conversation */
+.conversation {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: calc(720px + 2 * var(--s-6));
+  margin: 0 auto;
+  padding: var(--s-2) var(--s-6) var(--s-10);
+}
+
+.panel .thread {
+  gap: 22px;
+  padding: var(--s-5) var(--s-4) var(--s-8);
+}
+
+.dock {
+  position: relative;
+  flex: none;
+  padding: 0 var(--s-6) var(--s-4);
+}
+
+/* Messages fade out above the composer. */
+.dock::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 28px;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  content: "";
+  pointer-events: none;
+}
+
+.dock.panel {
+  padding: 0 var(--s-3) var(--s-3);
+}
+
+.dockInner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.note {
+  margin-top: var(--s-2);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .welcome {
+    padding: var(--s-5) var(--s-4) var(--s-6);
+  }
+
+  .thread {
+    padding-inline: var(--s-4);
+  }
+
+  .dock {
+    padding-inline: var(--s-4);
+  }
+}

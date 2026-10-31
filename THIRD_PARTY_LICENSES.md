@@ -2,9 +2,9 @@
 
 What this project runs on, under which license, and what that means when the
 system is delivered to a client. The project's own code (`api/`, `core/`,
-`agent/`, `scripts/`, `tests/`, `n8n/`) is not covered here; its owner sets its license.
+`library/`, `agent/`, `scripts/`, `tests/`, `n8n/`, `web/`) is not covered here; its owner sets its license.
 
-Versions are the ones locked in `uv.lock`. Licenses are taken from each
+Versions are the ones locked in `uv.lock` and `web/package-lock.json`. Licenses are taken from each
 package's own metadata and license files (regenerate the list with the
 command at the end), and from the model cards for model weights.
 
@@ -13,6 +13,7 @@ command at the end), and from the model cards for model weights.
 | | Risk for commercial delivery |
 |---|---|
 | Python packages | None found. All are permissive (MIT, BSD, Apache-2.0, PSF, MIT-CMU). Keep their notices when you redistribute them. |
+| Dashboard (npm) packages | None found. MIT and ISC; the bundled Inter font is OFL-1.1. `web/dist` contains their code: keep their notices when you deliver it. |
 | Docling layout model, RapidOCR models, Qwen3.5, nomic-embed-text | None found. Apache-2.0. |
 | **tev1** (classifier) | **Unresolved.** The publisher's model card says the weights' release license "is being finalized"; the model is labelled experimental. See [tev1](#tev1). Set `TEV_MODEL=none` to run without it. |
 | **n8n** | **Conditions apply.** Sustainable Use License: you may build and maintain workflows for a client on *their* n8n; you may not host n8n for clients so they can build workflows. See [n8n](#n8n). |
@@ -58,6 +59,25 @@ Notable packages installed with the above:
 
 Development and test only (not needed to run the service): pytest 9.1.1 (MIT),
 reportlab 5.1.0 (BSD), used to generate the synthetic sample forms.
+
+## Dashboard packages (`web/`)
+
+Licenses from each package's `package.json`. Runtime: bundled into `web/dist`
+by `npm run build`, which the API serves.
+
+| Package | Version | License | Used for |
+|---|---|---|---|
+| react / react-dom (with scheduler 0.27.0) | 19.2.9 | MIT | UI |
+| react-router (with cookie 1.1.1, set-cookie-parser 2.7.3) | 7.18.4 | MIT | Routing |
+| @tanstack/react-query / @tanstack/query-core | 5.104.1 | MIT | Server state |
+| openapi-fetch (with openapi-typescript-helpers 0.1.0) | 0.17.0 | MIT | Typed API client |
+| lucide-react | 1.54.0 | ISC | Icons |
+| @fontsource-variable/inter | 5.3.0 | OFL-1.1 (SIL Open Font License; Inter © The Inter Project Authors) | Inter font files. OFL allows bundling and redistribution with software; the font may not be sold on its own, and its license text (`node_modules/@fontsource-variable/inter/LICENSE`) goes with it |
+
+Development only (not in `web/dist`): vite 7.3.7, @vitejs/plugin-react 5.2.0,
+vitest 5.0.5, openapi-typescript 7.13.0, @types/react, @types/react-dom,
+@types/node (all MIT); typescript 5.9.3 and @playwright/test 1.63.0
+(Apache-2.0).
 
 ## Model weights
 
@@ -121,6 +141,10 @@ with them) apply instead. The shipped configuration uses local Ollama only.
   include this file and the license texts that ship inside each package
   (`.venv/Lib/site-packages/<package>-<version>.dist-info/licenses/`), and
   keep Apache-2.0 `NOTICE` files.
+* Delivering a built dashboard (`web/dist`) redistributes the npm runtime
+  packages above. MIT, ISC and OFL-1.1 require their copyright and license
+  text with copies: include this file and each runtime package's `LICENSE`
+  (`web/node_modules/<package>/LICENSE`, `LICENSE.md` for react-router).
 * Model weights are downloaded by the client's machine from Hugging Face and
   Ollama under the licenses above.
 * Resolve the tev1 question (or ship with `TEV_MODEL=none`) before a paid delivery.

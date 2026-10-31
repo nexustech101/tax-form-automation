@@ -1,22 +1,24 @@
-"""agent/ingest.py
+"""library/ingest.py
 
-Turns an uploaded file into a `DocumentDraft`: chunks of text with metadata,
-ready for `Library.add`.
+Turns an uploaded file into a `DocumentDraft`: the forms extracted from it,
+its page sizes, and chunks of text with metadata, ready for `Library.add`.
 
 | File                         | Chunks                                                                |
 |------------------------------|-----------------------------------------------------------------------|
 | PDF / image, `extract=true`  | per extracted form: its fields as `name: value` lines (form id and    |
 |                              | tax year as metadata; long tables split by rows), plus the text of    |
-|                              | pages no form was extracted from                                      |
+|                              | pages no form was extracted from. Every form (ok, unsupported,        |
+|                              | duplicate) is kept in `forms` for review                              |
 | PDF / image, `extract=false` | text per page                                                         |
 | .md                          | sections by heading                                                   |
 | .txt                         | paragraphs                                                            |
 | .csv / .xlsx                 | rows, header repeated in every chunk (.xlsx: per sheet)               |
 
 Every chunk is at most `chunk_chars` long. SSNs (123-45-6789 or 123 45 6789)
-are masked to their last four digits before anything is stored or embedded;
-EINs (12-3456789) are kept. Bare nine-digit numbers are not touched: they are
-as often account numbers or CUSIPs.
+are masked to their last four digits in every chunk before it is stored or
+embedded; EINs (12-3456789) are kept. Bare nine-digit numbers are not touched:
+they are as often account numbers or CUSIPs. Extracted `forms` keep values as
+read (the reviewer compares them with the original file).
 
 *Usage:*
 >>> draft = await read_file(pipeline, data, "stack.pdf", chunk_chars=1500, client="Okafor")
@@ -30,32 +32,56 @@ import csv
 import hashlib
 import io
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from agent.rag import ChunkDraft, DocumentDraft
-from agent.schema import FileType
 from core.layout import lines_of
 from core.parser import ConversionFailed, ParsedDocument, UnsupportedDocument, sniff
 from core.pipeline import TaxDocumentPipeline
 from core.schema import FormResult
+from core.utils import mask_ssns
+from library.files import page_sizes
+from library.schema import FileType, PageInfo
 
-TEXT_SUFFIXES = {".txt": FileType.TXT, ".md": FileType.MD, ".csv": FileType.CSV, ".xlsx": FileType.XLSX}
-_SSN = re.compile(r"\b\d{3}([- ])\d{2}\1(\d{4})\b")
+TEXT_SUFFIXES = {
+    ".txt": (FileType.TXT, "text/plain"), ".md": (FileType.MD, "text/markdown"), ".csv": (FileType.CSV, "text/csv"),
+    ".xlsx": (FileType.XLSX, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+}
 _HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 
 
-def mask_ssns(text: str) -> str:
-    """*Usage:*
-    >>> mask_ssns("SSN 412-56-7890, EIN 84-1736295")
-    'SSN XXX-XX-7890, EIN 84-1736295'
-    """
-    return _SSN.sub(r"XXX-XX-\2", text)
+@dataclass
+class ChunkDraft:
+    content: str
+    document_type: str  # form id, or "text"
+    section_title: str = ""
+    header_level: int | None = None
+    page_number: int | None = None
+    sheet_name: str | None = None
+    tax_year: int | None = None
+    form_index: int | None = None  # the form (FormResult.index) the chunk was made from
 
 
-def file_type(filename: str, data: bytes) -> FileType:
+@dataclass
+class DocumentDraft:
+    title: str
+    type: FileType
+    media_type: str
+    length_bytes: int
+    location: str
+    content_hash: str
+    client: str | None = None
+    tax_year: int | None = None
+    chunks: list[ChunkDraft] = field(default_factory=list)
+    forms: list[FormResult] = field(default_factory=list)
+    pages: list[PageInfo] = field(default_factory=list)
+
+
+def file_type(filename: str, data: bytes) -> tuple[FileType, str]:
+    """(file type, media type): PDFs and images by their bytes, text files by their suffix."""
     try:
         media_type, _ = sniff(data)
-        return FileType.PDF if media_type == "application/pdf" else FileType.IMAGE
+        return (FileType.PDF if media_type == "application/pdf" else FileType.IMAGE), media_type
     except UnsupportedDocument:
         kind = TEXT_SUFFIXES.get(Path(filename).suffix.lower())
         if kind is None:
@@ -157,35 +183,47 @@ def _lines(value, path: str = "") -> list[str]:
     return [f"{path}: {value}"]
 
 
-def form_chunks(form: FormResult, chunk_chars: int) -> list[ChunkDraft]:
-    """An extracted form as `path: value` lines; the heading line (form, year, pages) leads every chunk."""
-    fields = form.fields.model_dump(mode="json", exclude_none=True)
+def form_lines(fields: dict) -> list[str]:
+    """A form's fields (JSON dump) as `path: value` lines, SSNs masked."""
+    return [mask_ssns(line) for line in _lines(fields)]
+
+
+def form_chunks(form: FormResult, chunk_chars: int, fields: dict | None = None) -> list[ChunkDraft]:
+    """
+    An extracted form as `path: value` lines; the heading line (form, year,
+    pages) leads every chunk. `fields`: values to use instead of the
+    extracted ones (the reviewed fields, `review.corrected_fields`).
+    """
+    fields = fields if fields is not None else form.fields.model_dump(mode="json", exclude_none=True)
     year = fields.get("tax_year")
     pages = ", ".join(map(str, form.pages))
     head = f"{form.form_name}" + (f", tax year {year}" if year else "") + f" (page {pages})"
-    return [ChunkDraft(content=c, document_type=form.document_type, section_title=form.form_name or "",
-                       page_number=form.pages[0] if form.pages else None, tax_year=year)
+    return [ChunkDraft(content=mask_ssns(c), document_type=form.document_type, section_title=form.form_name or "",
+                       page_number=form.pages[0] if form.pages else None, tax_year=year, form_index=form.index)
             for c in pack(_lines(fields), chunk_chars, head=head)]
 
 
 async def scanned_chunks(pipeline: TaxDocumentPipeline, data: bytes, filename: str, extract: bool,
-                         chunk_chars: int) -> list[ChunkDraft]:
+                         chunk_chars: int) -> tuple[list[ChunkDraft], list[FormResult]]:
+    """(chunks, every form found). Duplicates are copies: they get no chunks."""
     if not extract:
         doc = await pipeline.parser.parse(data, filename, max_pages=pipeline.settings.bulk_max_pages)
-        return page_chunks(doc, {b.page for b in doc.blocks}, chunk_chars)
+        return page_chunks(doc, {b.page for b in doc.blocks}, chunk_chars), []
     result, doc = await pipeline.extract_file(data, filename)
-    forms = [f for f in result.forms if f.status == "ok"]
-    handled = {p for f in result.forms if f.status != "unsupported" for p in f.pages}  # duplicates are copies: skipped
-    return ([c for f in forms for c in form_chunks(f, chunk_chars)]
-            + page_chunks(doc, {b.page for b in doc.blocks} - handled, chunk_chars))
+    handled = {p for f in result.forms if f.status != "unsupported" for p in f.pages}
+    chunks = [c for f in result.forms if f.status == "ok" for c in form_chunks(f, chunk_chars)]
+    return chunks + page_chunks(doc, {b.page for b in doc.blocks} - handled, chunk_chars), result.forms
 
 
 async def read_file(pipeline: TaxDocumentPipeline, data: bytes, filename: str, *, chunk_chars: int,
                     extract: bool = True, title: str | None = None, location: str | None = None,
                     client: str | None = None, tax_year: int | None = None) -> DocumentDraft:
-    kind = file_type(filename, data)
+    kind, media_type = file_type(filename, data)
+    forms: list[FormResult] = []
+    pages: list[PageInfo] = []
     if kind in (FileType.PDF, FileType.IMAGE):
-        chunks = await scanned_chunks(pipeline, data, filename, extract, chunk_chars)
+        chunks, forms = await scanned_chunks(pipeline, data, filename, extract, chunk_chars)
+        pages = page_sizes(data, media_type)
     elif kind is FileType.XLSX:
         chunks = xlsx_chunks(data, chunk_chars)
     else:
@@ -203,6 +241,6 @@ async def read_file(pipeline: TaxDocumentPipeline, data: bytes, filename: str, *
         raise ConversionFailed("No text could be read from the document.")
     for chunk in chunks:
         chunk.content = mask_ssns(chunk.content)
-    return DocumentDraft(title=title or Path(filename).stem, type=kind, length_bytes=len(data),
+    return DocumentDraft(title=title or Path(filename).stem, type=kind, media_type=media_type, length_bytes=len(data),
                          location=location or filename, content_hash=hashlib.sha256(data).hexdigest(),
-                         client=client, tax_year=tax_year, chunks=chunks)
+                         client=client, tax_year=tax_year, chunks=chunks, forms=forms, pages=pages)

@@ -1,0 +1,128 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.titleText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sub {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+
+.progressRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.progressRow > :first-child {
+  flex: 1;
+}
+
+.progressText {
+  flex: none;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.blocked,
+.ready,
+.approved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: calc(var(--s-1) * -1);
+  font-size: var(--fs-sm);
+}
+
+.blocked {
+  color: var(--warning);
+}
+
+.ready {
+  color: var(--text-3);
+}
+
+.approved {
+  color: var(--success);
+}
+
+.approved svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+}
+
+.formFlags {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0 0 var(--s-6);
+  overflow: auto;
+  list-style: none;
+}
+
+.group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px var(--s-4);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.legend {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  padding: var(--s-2) var(--s-4);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+
+.legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}

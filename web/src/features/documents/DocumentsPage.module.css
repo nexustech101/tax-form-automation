@@ -1,0 +1,112 @@
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.search {
+  position: relative;
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+.search svg {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  width: 15px;
+  height: 15px;
+  color: var(--text-3);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.search input {
+  padding-left: 32px;
+}
+
+.select {
+  width: auto;
+  min-width: 140px;
+}
+
+.year {
+  width: 96px;
+}
+
+.pad {
+  padding: var(--s-4);
+}
+
+.skeletonRow {
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.titleCell {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  max-width: 360px;
+}
+
+.fileIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+.fileIcon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.titleText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.title {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.meta {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+}
+
+.types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: var(--s-2) var(--s-4);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+
+.pagerButtons {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.strong {
+  color: var(--text);
+}

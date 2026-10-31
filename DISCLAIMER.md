@@ -20,7 +20,7 @@ with or endorsed by the IRS or any government agency.
 ## 2. Every value must be reviewed by a qualified person
 
 All output is produced automatically by software and machine-learning models
-and **can be wrong or incomplete**, including when it reports no warnings. In
+and **can be wrong or incomplete**, including when it reports no flags. In
 particular:
 
 * text read by OCR from scans and photos can contain misread characters,
@@ -33,7 +33,7 @@ particular:
 
 Before any value is used on a return, filing, or in advice to a client, a
 qualified person must compare it with the source document. The Software marks
-documents it considers risky (`needs_review`, validation warnings), but a
+documents it considers risky (`needs_review`, validation flags), but a
 document *not* marked is not a guarantee of correctness.
 
 ## 3. No warranty
@@ -67,28 +67,42 @@ The Software runs on systems the client controls. The client is responsible for:
   Publication 5708) and the IRS data-security guidance for tax professionals
   (Publication 4557);
 * how long documents and extracted data are kept, and their deletion,
-  including the document library database and its backups;
+  including the document library database, its stored original files and
+  their backups;
 * obtaining any consent its clients' documents require before they are processed;
 * the licenses of third-party components it runs, including n8n and the
   model weights (see `THIRD_PARTY_LICENSES.md`).
 
 ## 6. Data handling, as designed
 
-* The extraction routes do not store uploaded documents or extracted values.
+* The extraction routes (`/v1/documents/...`) do not store uploaded documents
+  or extracted values.
   The API-key database stores only hashed keys and their metadata. Logs carry
   request ids, timings, form types and counts, not document text or values.
-* Documents added to the document library (`/v1/library/documents`) are stored
-  as searchable text and extracted fields in the library database
-  (`library.database` in `config/model_config.yml`), with Social Security
-  numbers masked to the last four digits before storage. Names, addresses,
-  amounts and employer identification numbers are stored as printed. The
-  original file is not kept. Each API key sees only the documents it added;
-  admin keys see all of them. Documents stay until deleted through the API.
+* Documents added to the document library (`/v1/library/documents`) are
+  stored for review and search. The original file is kept on disk
+  (`library.files` in `config/model_config.yml`, default `data/files/`) so its
+  pages can be shown to reviewers and downloaded. The library database
+  (`library.database`) holds the extracted forms with their values as read,
+  including full tax identification numbers, and the searchable text, in
+  which Social Security numbers are masked to the last four digits. Names,
+  addresses, amounts and employer identification numbers are stored as
+  printed. Each API key sees only the documents it added; admin keys see all
+  of them. Documents, their forms, reviews and (once no other document uses
+  it) the original file stay until deleted through the API.
+* Review decisions (confirmed, corrected, rejected, with the corrected value
+  and an optional note) and form approvals are recorded with the name and id
+  of the API key that made them and the time. They record who reviewed a
+  value in the Software; they do not replace the review required by section 2
+  or the firm's own records of it.
 * Models run locally through Ollama; documents are not sent to an outside AI
   service unless the client reconfigures the workflow or
   `config/model_config.yml` to use one. When the assistant is configured with
   a cloud provider, that provider receives the questions asked and the
-  library excerpts retrieved to answer them.
+  results of the assistant's tools: library excerpts, document and form
+  details, and stored or re-extracted field values, with Social Security
+  numbers masked to the last four digits (names, addresses, amounts and
+  employer identification numbers as printed).
 * The n8n workflow masks tax identification numbers to the last four digits
   before they reach the AI assistant, the log table or any email or chat alert.
 

@@ -1,0 +1,72 @@
+.page {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: var(--s-6);
+  background: var(--bg);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  width: 100%;
+  max-width: 400px;
+  padding: var(--s-8);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.logo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.logo svg {
+  width: 20px;
+  height: 20px;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.heading h1 {
+  font-size: var(--fs-xl);
+}
+
+.heading p {
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+}
+
+.remember {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: calc(var(--s-2) * -1);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.remember input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.submit {
+  width: 100%;
+  height: 36px;
+}

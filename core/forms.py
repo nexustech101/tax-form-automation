@@ -23,6 +23,7 @@ from typing import Annotated, Any, ClassVar, Literal, Optional, Union
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer
 
+from core.flags import Flag
 from core.utils import (
     clean_text,
     parse_acquired,
@@ -85,6 +86,10 @@ def column(label: str, *aliases: str, lead: bool = False) -> Any:
     return Field(default=None, description=label, json_schema_extra={"columns": [label, *aliases], "lead": lead})
 
 
+def inconsistent(field: str, message: str) -> Flag:
+    return Flag(field=field, code="inconsistent", message=message)
+
+
 class _Model(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
@@ -127,14 +132,16 @@ class TaxForm(_Model):
     """Base for all forms. Subclasses set the ClassVars."""
 
     FORM_ID: ClassVar[str]
+    NAME: ClassVar[str]  # short form name for display: "W-2", "1099-NEC", "K-1 (1065)"
     TITLE: ClassVar[str]  # "Form <number> <name>" / "Schedule <number> (Form ...) <name>": also its printed heading
     HINT: ClassVar[str]  # what distinguishes this form, for the classifier
     MULTI_PAGE: ClassVar[bool] = False  # one form may continue over pages that repeat its heading
 
     tax_year: Year = Field(default=None, description="Calendar / tax year printed on the form")
 
-    def consistency_checks(self) -> list[str]:
-        """Arithmetic sanity checks. Warnings only: forms can be legitimately odd."""
+    def consistency_checks(self) -> list[Flag]:
+        """Arithmetic sanity checks, as `inconsistent` flags on the field that looks off. Flags only: forms can
+        be legitimately odd."""
         return []
 
 
@@ -160,6 +167,7 @@ class W2StateRow(_Model):
 
 class W2(TaxForm):
     FORM_ID = "w2"
+    NAME = "W-2"
     TITLE = "Form W-2 Wage and Tax Statement"
     HINT = "Employer-issued wage statement with boxes for wages, tips, social security and Medicare wages and withholding."
 
@@ -183,16 +191,18 @@ class W2(TaxForm):
     box14_other: list[DescribedAmount] = rows("Box 14: Other (description and amount)", 3)
     state_local: list[W2StateRow] = rows("Boxes 15-20: state and local tax rows", 2)
 
-    def consistency_checks(self) -> list[str]:
+    def consistency_checks(self) -> list[Flag]:
         out = []
         if self.social_security_wages and self.social_security_tax_withheld is not None:
             expected = self.social_security_wages * Decimal("0.062")
             if abs(expected - self.social_security_tax_withheld) > 1:
-                out.append(f"box 4 ({self.social_security_tax_withheld}) is not 6.2% of box 3 ({self.social_security_wages})")
+                out.append(inconsistent("social_security_tax_withheld", f"box 4 ({self.social_security_tax_withheld}) "
+                                        f"is not 6.2% of box 3 ({self.social_security_wages})"))
         if self.medicare_wages_and_tips and self.medicare_tax_withheld is not None:
             expected = self.medicare_wages_and_tips * Decimal("0.0145")
             if self.medicare_tax_withheld + 1 < expected:
-                out.append(f"box 6 ({self.medicare_tax_withheld}) is below 1.45% of box 5 ({self.medicare_wages_and_tips})")
+                out.append(inconsistent("medicare_tax_withheld", f"box 6 ({self.medicare_tax_withheld}) "
+                                        f"is below 1.45% of box 5 ({self.medicare_wages_and_tips})"))
         return out
 
 
@@ -201,6 +211,7 @@ class W2(TaxForm):
 
 class Form1099NEC(InformationReturn):
     FORM_ID = "1099_nec"
+    NAME = "1099-NEC"
     TITLE = "Form 1099-NEC Nonemployee Compensation"
     HINT = "Reports nonemployee compensation paid to independent contractors; box 1 nonemployee compensation."
 
@@ -216,6 +227,7 @@ class Form1099NEC(InformationReturn):
 
 class Form1099MISC(InformationReturn):
     FORM_ID = "1099_misc"
+    NAME = "1099-MISC"
     TITLE = "Form 1099-MISC Miscellaneous Information"
     HINT = "Reports rents, royalties, other income, prizes, medical and health care payments, attorney proceeds."
 
@@ -241,6 +253,7 @@ class Form1099MISC(InformationReturn):
 
 class Form1099INT(InformationReturn):
     FORM_ID = "1099_int"
+    NAME = "1099-INT"
     TITLE = "Form 1099-INT Interest Income"
     HINT = "Bank or brokerage statement of interest income, early withdrawal penalty, tax-exempt interest, bond premium."
 
@@ -267,6 +280,7 @@ class Form1099INT(InformationReturn):
 
 class Form1099DIV(InformationReturn):
     FORM_ID = "1099_div"
+    NAME = "1099-DIV"
     TITLE = "Form 1099-DIV Dividends and Distributions"
     HINT = "Reports ordinary and qualified dividends, capital gain distributions, section 199A dividends."
 
@@ -293,15 +307,17 @@ class Form1099DIV(InformationReturn):
     specified_private_activity_bond_interest_dividends: Money = box("13", "Specified private activity bond interest dividends")
     state_info: list[StateTaxRow] = rows("Boxes 14-16: State, State identification no., State tax withheld", 2)
 
-    def consistency_checks(self) -> list[str]:
+    def consistency_checks(self) -> list[Flag]:
         if self.qualified_dividends and self.total_ordinary_dividends is not None:
             if self.qualified_dividends > self.total_ordinary_dividends:
-                return ["box 1b qualified dividends exceed box 1a total ordinary dividends"]
+                return [inconsistent("qualified_dividends",
+                                     "box 1b qualified dividends exceed box 1a total ordinary dividends")]
         return []
 
 
 class Form1099R(InformationReturn):
     FORM_ID = "1099_r"
+    NAME = "1099-R"
     TITLE = "Form 1099-R Distributions From Pensions, Annuities, Retirement or Profit-Sharing Plans, IRAs, Insurance Contracts, etc."
     HINT = "Reports retirement plan, pension, annuity and IRA distributions with distribution codes."
 
@@ -327,14 +343,15 @@ class Form1099R(InformationReturn):
     date_of_payment: Date = box("13", "Date of payment")
     state_info: list[StateTaxRow] = rows("Boxes 14-16: State tax withheld, State/Payer's state no., State distribution", 2)
 
-    def consistency_checks(self) -> list[str]:
+    def consistency_checks(self) -> list[Flag]:
         if self.taxable_amount and self.gross_distribution is not None and self.taxable_amount > self.gross_distribution:
-            return ["box 2a taxable amount exceeds box 1 gross distribution"]
+            return [inconsistent("taxable_amount", "box 2a taxable amount exceeds box 1 gross distribution")]
         return []
 
 
 class Form1099G(InformationReturn):
     FORM_ID = "1099_g"
+    NAME = "1099-G"
     TITLE = "Form 1099-G Certain Government Payments"
     HINT = "Government-issued: unemployment compensation, state or local income tax refunds, credits or offsets."
 
@@ -354,6 +371,7 @@ class Form1099G(InformationReturn):
 
 class SSA1099(TaxForm):
     FORM_ID = "ssa_1099"
+    NAME = "SSA-1099"
     TITLE = "Form SSA-1099 Social Security Benefit Statement"
     HINT = "Social Security Administration benefit statement: benefits paid, benefits repaid, net benefits."
 
@@ -365,10 +383,10 @@ class SSA1099(TaxForm):
     claim_number: Text = box("8", "Claim number (use this number if you need to contact SSA)")
     medicare_part_b_premiums: Money = box(None, "Medicare Part B premiums deducted from your benefits")
 
-    def consistency_checks(self) -> list[str]:
+    def consistency_checks(self) -> list[Flag]:
         if None not in (self.benefits_paid, self.benefits_repaid, self.net_benefits):
             if self.benefits_paid - self.benefits_repaid != self.net_benefits:
-                return ["box 5 net benefits does not equal box 3 minus box 4"]
+                return [inconsistent("net_benefits", "box 5 net benefits does not equal box 3 minus box 4")]
         return []
 
 
@@ -377,6 +395,7 @@ class SSA1099(TaxForm):
 
 class Form1098(InformationReturn):
     FORM_ID = "1098"
+    NAME = "1098"
     TITLE = "Form 1098 Mortgage Interest Statement"
     HINT = "Lender statement of mortgage interest received, outstanding principal, points and mortgage insurance premiums."
 
@@ -397,6 +416,7 @@ class Form1098(InformationReturn):
 
 class Form1098T(InformationReturn):
     FORM_ID = "1098_t"
+    NAME = "1098-T"
     TITLE = "Form 1098-T Tuition Statement"
     HINT = "College or university tuition statement: qualified tuition payments, scholarships or grants, half-time and graduate student checkboxes."
 
@@ -414,6 +434,7 @@ class Form1098T(InformationReturn):
 
 class Form1098E(InformationReturn):
     FORM_ID = "1098_e"
+    NAME = "1098-E"
     TITLE = "Form 1098-E Student Loan Interest Statement"
     HINT = "Student loan servicer statement of student loan interest received."
 
@@ -470,6 +491,7 @@ class BrokerTransaction(_Model):
 
 class Form1099B(InformationReturn):
     FORM_ID = "1099_b"
+    NAME = "1099-B"
     TITLE = "Form 1099-B Proceeds From Broker and Barter Exchange Transactions"
     HINT = "Broker statement of securities sales: description, dates acquired and sold, proceeds, cost basis, wash sales, short-term or long-term."
     MULTI_PAGE = True  # transaction detail runs over many pages
@@ -483,19 +505,21 @@ class Form1099B(InformationReturn):
     transactions: list[BrokerTransaction] = table("Boxes 1a-1g: sales, one row per transaction")
     state_info: list[StateTaxRow] = rows("Boxes 14-16: State name, State identification no., State tax withheld", 2)
 
-    def consistency_checks(self) -> list[str]:
+    def consistency_checks(self) -> list[Flag]:
         out = []
         for i, t in enumerate(self.transactions):
             if None in (t.proceeds, t.cost_basis, t.gain_or_loss):
                 continue
             expected = t.proceeds - t.cost_basis + (t.wash_sale_loss_disallowed or 0)
             if abs(expected - t.gain_or_loss) > 1:
-                out.append(f"transactions[{i}]: gain or loss {t.gain_or_loss} is not proceeds - basis + wash sale ({expected})")
+                out.append(inconsistent(f"transactions[{i}].gain_or_loss", f"gain or loss {t.gain_or_loss} is not "
+                                        f"proceeds - basis + wash sale ({expected})"))
         return out
 
 
 class Form1099K(InformationReturn):
     FORM_ID = "1099_k"
+    NAME = "1099-K"
     TITLE = "Form 1099-K Payment Card and Third Party Network Transactions"
     HINT = "Payment processor or marketplace statement of gross payment card and third party network transactions, with monthly amounts."
 
@@ -528,13 +552,13 @@ class Form1099K(InformationReturn):
     MONTHS: ClassVar[tuple[str, ...]] = ("january", "february", "march", "april", "may", "june", "july",
                                          "august", "september", "october", "november", "december")
 
-    def consistency_checks(self) -> list[str]:
+    def consistency_checks(self) -> list[Flag]:
         months = [getattr(self, m) for m in self.MONTHS]
         if self.gross_amount is None or all(m is None for m in months):
             return []
         total = sum((m for m in months if m is not None), Decimal(0))
         if abs(total - self.gross_amount) > 1:
-            return [f"boxes 5a-5l total {total}, but box 1a gross amount is {self.gross_amount}"]
+            return [inconsistent("gross_amount", f"boxes 5a-5l total {total}, but box 1a gross amount is {self.gross_amount}")]
         return []
 
 
@@ -558,6 +582,7 @@ class MonthlyCoverage(_Model):
 
 class Form1095A(TaxForm):
     FORM_ID = "1095_a"
+    NAME = "1095-A"
     TITLE = "Form 1095-A Health Insurance Marketplace Statement"
     HINT = "Health Insurance Marketplace statement: policy, covered individuals, monthly enrollment premiums, SLCSP premium and advance premium tax credit."
 
@@ -582,7 +607,7 @@ class Form1095A(TaxForm):
     annual_slcsp_premium: Money = box("33B", "Annual Totals: Monthly second lowest cost silver plan (SLCSP) premium")
     annual_advance_ptc: Money = box("33C", "Annual Totals: Monthly advance payment of premium tax credit")
 
-    def consistency_checks(self) -> list[str]:
+    def consistency_checks(self) -> list[Flag]:
         out = []
         for column_name, total_name in (("enrollment_premium", "annual_enrollment_premiums"),
                                         ("slcsp_premium", "annual_slcsp_premium"),
@@ -590,7 +615,8 @@ class Form1095A(TaxForm):
             total = getattr(self, total_name)
             values = [getattr(m, column_name) for m in self.monthly if getattr(m, column_name) is not None]
             if total is not None and values and abs(sum(values, Decimal(0)) - total) > 1:
-                out.append(f"line 33 {total_name} {total} does not equal the sum of the months ({sum(values, Decimal(0))})")
+                out.append(inconsistent(total_name, f"line 33 {total_name} {total} does not equal the sum of the "
+                                                    f"months ({sum(values, Decimal(0))})"))
         return out
 
 
@@ -608,6 +634,7 @@ class K1CapitalAccount(_Model):
 
 class ScheduleK1_1065(TaxForm):
     FORM_ID = "k1_1065"
+    NAME = "K-1 (1065)"
     TITLE = "Schedule K-1 (Form 1065) Partner's Share of Income, Deductions, Credits, etc."
     HINT = "Partnership K-1: Part I partnership info, Part II partner info, Part III partner's share of current year income with coded boxes."
     MULTI_PAGE = True  # supplemental statements follow the face page
@@ -653,7 +680,7 @@ class ScheduleK1_1065(TaxForm):
     other_information: list[CodedAmount] = rows("Box 20: Other information, code and amount", 3)
     foreign_taxes_paid_or_accrued: Money = box("21", "Foreign taxes paid or accrued")
 
-    def consistency_checks(self) -> list[str]:
+    def consistency_checks(self) -> list[Flag]:
         ca = self.capital_account
         if ca is None or ca.beginning_capital_account is None or ca.ending_capital_account is None:
             return []
@@ -661,7 +688,8 @@ class ScheduleK1_1065(TaxForm):
         rolled = (ca.beginning_capital_account + (ca.capital_contributed or zero) + (ca.current_year_net_income or zero)
                   + (ca.other_increase_decrease or zero) - abs(ca.withdrawals_and_distributions or zero))
         if abs(rolled - ca.ending_capital_account) > 1:
-            return [f"item L capital account does not roll forward (computed {rolled}, printed {ca.ending_capital_account})"]
+            return [inconsistent("capital_account.ending_capital_account", f"item L capital account does not roll "
+                                 f"forward (computed {rolled}, printed {ca.ending_capital_account})")]
         return []
 
 

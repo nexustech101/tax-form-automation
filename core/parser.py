@@ -47,6 +47,7 @@ from fastapi.concurrency import run_in_threadpool
 from PIL import Image, ImageDraw
 
 from core.config import Settings
+from core.flags import Flag
 from core.layout import Block, blocks_from_conversion, page_heights
 
 log = logging.getLogger(__name__)
@@ -99,18 +100,19 @@ class ParsedDocument:
     def text(self) -> str:
         return "\n".join(b.text for b in self.blocks)
 
-    def gaps_in(self, pages: list[int]) -> list[str]:
+    def gaps_in(self, pages: list[int]) -> list[Flag]:
         """
-        Warnings for a form on `pages`: the file was only partly converted, or a
-        page inside the form's page range produced no text.
+        Form-level flags for a form on `pages`: the file was only partly
+        converted, or a page inside the form's page range produced no text.
         """
         out = []
         if self.conversion_errors:
-            out.append(f"the file was only partly converted ({'; '.join(self.conversion_errors)[:300]}); "
-                       "values may be missing")
+            out.append(Flag(field=None, code="partial_conversion", message="the file was only partly converted "
+                            f"({'; '.join(self.conversion_errors)[:300]}); values may be missing"))
         holes = [p for p in self.missing_pages if pages and min(pages) < p < max(pages)]
         if holes:
-            out.append(f"no text could be read from page(s) {', '.join(map(str, holes))} inside this form")
+            out.append(Flag(field=None, code="missing_page",
+                            message=f"no text could be read from page(s) {', '.join(map(str, holes))} inside this form"))
         return out
 
     def page_image(self, page_no: int) -> np.ndarray | None:

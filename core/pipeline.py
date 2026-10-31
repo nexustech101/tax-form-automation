@@ -33,6 +33,7 @@ from pydantic import BaseModel
 
 from core.config import Settings
 from core.extractor import LLMExtractor
+from core.flags import Flag
 from core.forms import FORMS, TaxForm, form_for
 from core.parser import ConversionFailed, DocumentTooLarge, DoclingParser, ParsedDocument, UnsupportedDocument
 from core.schema import (
@@ -194,7 +195,7 @@ class TaxDocumentPipeline:
                         "total": int((time.perf_counter() - started) * 1000)},
         )
 
-    async def _classify_segment(self, segment: Segment) -> tuple[Classification, list[str]]:
+    async def _classify_segment(self, segment: Segment) -> tuple[Classification, list[Flag]]:
         """
         tev1 on the form's own text (not the shared statement header). When
         tev is unsure but the form printed a supported heading, the heading
@@ -208,15 +209,16 @@ class TaxDocumentPipeline:
             return c, []
         resolved = Classification(hint, FORMS[hint].TITLE, c.probabilities.get(hint, 0.0), c.probabilities,
                                   c.model, c.elapsed_ms)
-        return resolved, [f"identified by its printed heading; {c.model} was not confident"]
+        return resolved, [Flag(field=None, code="uncertain_type",
+                               message=f"identified by its printed heading; {c.model} was not confident")]
 
     # --- extraction -----------------------------------------------------------------
 
-    async def _extract_form(self, form: type[TaxForm], segment: Segment, doc: ParsedDocument, notes: list[str]):
+    async def _extract_form(self, form: type[TaxForm], segment: Segment, doc: ParsedDocument, notes: list[Flag]):
         extraction = await self.extractor.extract(form, segment.all_blocks, doc.page_image)
-        warnings = notes + doc.gaps_in(segment.pages) + extraction.warnings
+        flags = notes + doc.gaps_in(segment.pages) + extraction.flags
         found, total = count_fields(extraction.fields)
-        report = ValidationReport(valid=not warnings, warnings=warnings, fields_found=found, fields_total=total,
+        report = ValidationReport(valid=not flags, flags=flags, fields_found=found, fields_total=total,
                                   sources=extraction.sources)
         return extraction, report
 
@@ -243,7 +245,7 @@ class TaxDocumentPipeline:
         extraction, report = await self._extract_form(form, segment, doc, notes)
         log.info("document processed", extra={"ctx": {
             "request_id": request_id, "document_type": form.FORM_ID, "pages": doc.pages,
-            "text_layer": doc.text_layer, "fields_found": report.fields_found, "warnings": len(report.warnings),
+            "text_layer": doc.text_layer, "fields_found": report.fields_found, "flags": len(report.flags),
         }})
         return ExtractResponse(
             request_id=request_id,

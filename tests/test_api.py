@@ -61,7 +61,7 @@ class FakePipeline:
         return ExtractResponse(
             request_id=request_id, document_type="w2", form_name=W2.TITLE, classification=CLASSIFICATION,
             fields=W2.model_validate({"wages_tips_other_comp": "1,000.00"}),
-            validation=ValidationReport(valid=True, warnings=[], fields_found=1, fields_total=30),
+            validation=ValidationReport(valid=True, flags=[], fields_found=1, fields_total=30),
             document=DocumentInfo(filename=filename, media_type="application/pdf", sha256="0" * 64,
                                   pages=1, text_layer=True),
             extraction_model="fake", timings_ms={"total": 1},
@@ -199,8 +199,8 @@ def test_unauthenticated_key_creation_is_off_by_default(api):
 
 def test_document_types_lists_schemas(api):
     r = api.client.get("/v1/document-types", headers=api.headers)
-    ids = {d["id"] for d in r.json()["data"]}
-    assert {"w2", "1099_nec", "k1_1065"} <= ids
+    names = {d["id"]: d["name"] for d in r.json()["data"]}
+    assert {"w2": "W-2", "1099_nec": "1099-NEC", "k1_1065": "K-1 (1065)"}.items() <= names.items()
 
 
 def test_extract_refuses_multi_form_files_and_points_to_bulk(api):
@@ -271,7 +271,7 @@ def test_extraction_beyond_running_and_queued_jobs_is_refused(api):
 def test_job_gate_runs_at_most_n_and_queues_the_rest():
     import asyncio
 
-    from api.deps import JobGate
+    from core.jobs import JobGate
 
     async def scenario():
         gate, running, peak = JobGate(running=2, queued=1), 0, 0
@@ -289,5 +289,5 @@ def test_job_gate_runs_at_most_n_and_queues_the_rest():
 
     peak, results = asyncio.run(scenario())
     assert peak == 2
-    assert results.count("HTTPException") == 1  # 2 running + 1 queued; the 4th is refused
+    assert results.count("Busy") == 1  # 2 running + 1 queued; the 4th is refused
 

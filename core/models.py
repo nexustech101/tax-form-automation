@@ -1,7 +1,8 @@
 """models.py
 
-Persisted models. Only API-key metadata is stored: tax documents and
-extracted values are never written to disk.
+Persisted models of the application database: API-key metadata only.
+Documents, extracted forms and reviews are stored by the document library
+(`library/store.py`, its own SQLite file).
 """
 
 from __future__ import annotations
