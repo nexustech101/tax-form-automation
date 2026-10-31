@@ -1,9 +1,10 @@
-import { LogOut, Monitor, Moon, Search, Sparkles, Sun } from "lucide-react";
+import { LogOut, Monitor, Moon, Search, Sun } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { matchPath, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { Button } from "../components/Button";
 import { Segmented } from "../components/Segmented";
 import { AssistantPanel } from "../features/assistant/AssistantPanel";
+import { Mark } from "../features/assistant/Mark";
 import { pages } from "../features";
 import { useAssistant } from "./assistant";
 import { useAuth } from "./auth";
@@ -41,7 +42,7 @@ export function Shell() {
             .filter((p) => p.nav)
             .map(({ path, label, icon: Icon }) => (
               <NavLink key={path} to={path} end={path === "/"} className={styles.navLink} title={label}>
-                {Icon && <Icon aria-hidden />}
+                {Icon && <Icon />}
                 <span className={styles.navLabel}>{label}</span>
               </NavLink>
             ))}
@@ -61,7 +62,7 @@ export function Shell() {
           <div className={styles.topActions}>
             <Segmented label="Theme" value={choice} onChange={setChoice} options={THEMES} />
             {pathname !== "/assistant" && <Button
-              icon={<Sparkles />}
+              icon={<Mark size={16} />}
               aria-pressed={assistant.panelOpen}
               onClick={assistant.panelOpen ? assistant.closePanel : assistant.openPanel}
             >

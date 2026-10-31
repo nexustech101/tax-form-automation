@@ -51,6 +51,9 @@
   --accent-text: #3451c8;
   --accent-soft: #eef1fd;
   --accent-border: #c3cdf6;
+  --mark-from: #4263eb;
+  --mark-to: #7950f2;
+  --mark-shade: rgb(11 16 48 / 0.6);
   --focus-ring: 0 0 0 3px rgb(59 91 219 / 0.28);
 
   --success: #067647;
@@ -105,6 +108,9 @@
   --accent-text: #91a7ff;
   --accent-soft: rgb(76 110 245 / 0.14);
   --accent-border: rgb(116 143 252 / 0.38);
+  --mark-from: #5c7cfa;
+  --mark-to: #9775fa;
+  --mark-shade: rgb(8 10 30 / 0.5);
   --focus-ring: 0 0 0 3px rgb(116 143 252 / 0.4);
 
   --success: #4fd18f;

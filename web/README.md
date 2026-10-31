@@ -84,6 +84,7 @@ Shortcuts (ignored while typing): `j`/`k` or arrows move, `c` confirm, `e` corre
 |---|---|
 | `Chat.tsx` | Empty state (page: greeting, composer, suggestion pills, "Needs review"; panel: intro and suggestion list), conversation thread, composer dock |
 | `Composer.tsx` | Question box, "+" menu (upload, attach), scope pills or document chips, send / stop |
+| `Mark.tsx` | The assistant mark: an inline-SVG twisted (Möbius) loop, one ribbon segment drawn three times at 120° (hues `--mark-from` → `--mark-to`, turning to `--mark-shade` where each end tucks under the next; per-instance ids via `useId`); `busy` adds a 2.8 s sheen and breathing, static under reduced motion. Used for the nav item, Assistant buttons, greeting, answer avatar and the pending row |
 | `Message.tsx` | User bubble, answer (Markdown, citations, sources, tool line, copy), pending and failure rows |
 | `chatUtils.ts`, `markdown.ts`, `citations.ts` | `greeting`, `isNearBottom`, `describeTool`; the Markdown subset; `[n]` citations |
 

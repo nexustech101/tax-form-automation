@@ -1,4 +1,4 @@
-import { ArrowLeft, Copy, Download, FileQuestion, Sparkles } from "lucide-react";
+import { ArrowLeft, Copy, Download, FileQuestion } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { ApiError, errorMessage } from "../../api/client";
@@ -14,6 +14,7 @@ import { Spinner } from "../../components/Spinner";
 import { useToast } from "../../components/Toast";
 import { plural } from "../../lib/format";
 import { ReviewState } from "../documents/ReviewState";
+import { Mark } from "../assistant/Mark";
 import { FormReview } from "./FormReview";
 import type { Box } from "./geometry";
 import { PageViewer, type Overlay } from "./PageViewer";
@@ -126,7 +127,7 @@ function Workspace({ document }: { document: DocumentDetail }) {
           >
             Original
           </Button>
-          <Button icon={<Sparkles />} onClick={assistant.openPanel}>
+          <Button icon={<Mark size={16} />} onClick={assistant.openPanel}>
             Ask about this document
           </Button>
         </div>

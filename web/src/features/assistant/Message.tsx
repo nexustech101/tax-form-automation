@@ -46,7 +46,7 @@ export function Thinking() {
   const label = scope.documents.length === 1 ? `Reading ${scope.documents[0]!.title}…` : "Searching documents…";
   return (
     <div className={styles.assistant} role="status">
-      <Mark className={`${styles.avatar} ${styles.pulse}`} />
+      <Mark busy className={styles.avatar} />
       <div className={styles.thinking}>
         <span className={styles.shimmer}>{label}</span>
         {seconds >= 5 && <span className={`${styles.elapsed} num`}>{seconds}s</span>}

@@ -3,7 +3,8 @@
  * `nav` entries appear in the sidebar in this order. `fullBleed` pages fill the content area (no padding,
  * no page scroll) and manage their own scrolling.
  */
-import { FileText, LayoutDashboard, Settings, Sparkles, type LucideIcon } from "lucide-react";
+import { FileText, LayoutDashboard, Settings } from "lucide-react";
+import { Mark } from "./assistant/Mark";
 import type { ComponentType } from "react";
 import { AssistantPage } from "./assistant/AssistantPage";
 import { DocumentsPage } from "./documents/DocumentsPage";
@@ -15,7 +16,7 @@ export type Page = {
   path: string;
   label: string;
   component: ComponentType;
-  icon?: LucideIcon;
+  icon?: ComponentType<{ className?: string }>;
   nav?: boolean;
   fullBleed?: boolean;
 };
@@ -24,6 +25,6 @@ export const pages: Page[] = [
   { path: "/", label: "Overview", icon: LayoutDashboard, component: OverviewPage, nav: true },
   { path: "/documents", label: "Documents", icon: FileText, component: DocumentsPage, nav: true },
   { path: "/documents/:id", label: "Review", component: ReviewPage, fullBleed: true },
-  { path: "/assistant", label: "Assistant", icon: Sparkles, component: AssistantPage, nav: true, fullBleed: true },
+  { path: "/assistant", label: "Assistant", icon: Mark, component: AssistantPage, nav: true, fullBleed: true },
   { path: "/settings", label: "Settings", icon: Settings, component: SettingsPage, nav: true },
 ];

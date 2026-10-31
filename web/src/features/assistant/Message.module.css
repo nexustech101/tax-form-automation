@@ -29,17 +29,6 @@
   margin-top: 2px;
 }
 
-.pulse {
-  animation: pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.45;
-    transform: scale(0.82) rotate(45deg);
-  }
-}
-
 .body {
   min-width: 0;
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowUp, CalendarDays, ChevronDown, ChevronRight, CircleAlert, FileText, FolderOpen, Plus, Search, Square, Upload, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowUp, CalendarDays, ChevronDown, ChevronRight, CircleAlert, FileText, FolderOpen, Plus, Search, Upload, Users, X } from "lucide-react";
 import { useDeferredValue, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { errorMessage } from "../../api/client";
 import { useDocuments, useStats, useUploadDocument } from "../../api/library";
@@ -126,7 +126,9 @@ export function Composer({ placement, minRows = 1, autoFocus }: Props) {
         </div>
         {pending ? (
           <button type="button" className={`${styles.send} ${styles.stop}`} onClick={stop} aria-label="Stop" title="Stop">
-            <Square aria-hidden />
+            <svg viewBox="0 0 10 10" aria-hidden>
+              <rect width="10" height="10" rx="2.5" />
+            </svg>
           </button>
         ) : (
           <button type="submit" className={styles.send} disabled={!canSend} aria-label="Send" title="Send (Enter)">

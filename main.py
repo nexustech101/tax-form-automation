@@ -77,5 +77,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    "ADMIN_KEY=ak_vNz8VHVjIKONxorp94FGMAjuEW9RTEMZ3JtOag3UHWI"
+    "ADMIN_KEY=ak_fQ-giObyK_ZDtp6AINjxneH12chuFBizZQdmsvUGAWg"
     main()

@@ -1,0 +1,50 @@
+.mark {
+  flex: none;
+  overflow: visible;
+}
+
+/* The dark face, where each segment turns under the next. */
+.dark {
+  stop-color: var(--mark-shade);
+}
+
+.sheen {
+  opacity: 0;
+}
+
+/* Pending: a slow sheen travels along the band while the mark breathes. */
+.busy {
+  animation: breathe 2.8s ease-in-out infinite;
+}
+
+.busy .sheen {
+  opacity: 1;
+  animation: sweep 2.8s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(150px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .busy,
+  .busy .sheen {
+    animation: none;
+  }
+
+  .busy .sheen {
+    opacity: 0;
+  }
+}

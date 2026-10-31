@@ -116,38 +116,23 @@
   stroke-width: 2.4;
 }
 
+/* Stop: the send button's shape, accent-tinted, with a small rounded square. */
 .stop {
-  position: relative;
-  background: var(--text);
-  color: var(--surface);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 .stop:hover:not(:disabled) {
-  background: var(--text-2);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .stop svg {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   fill: currentColor;
   stroke: none;
-}
-
-/* A ring that turns while the answer is pending. */
-.stop::after {
-  position: absolute;
-  inset: -4px;
-  border: 2px solid var(--accent-border);
-  border-top-color: var(--accent);
-  border-radius: var(--r-full);
-  content: "";
-  animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .pill {
