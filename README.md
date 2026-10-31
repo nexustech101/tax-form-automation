@@ -2,7 +2,7 @@
 
 FastAPI service that classifies and extracts 15 US tax form types from digital PDFs and scanned documents into typed JSON with structured review flags. A document library backs a review dashboard (each value checked side by side against where it was read on the page) and an AI assistant with read-only tools over the stored documents. Models run locally on Ollama by default.
 
-![Dashboard demo: upload, classification, review and assistant](docs/assets/demo.gif)
+![Dashboard demo: assistant, document upload, classification and review](docs/assets/demo.gif)
 
 Output requires human review against the source document. See [DISCLAIMER.md](DISCLAIMER.md) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
